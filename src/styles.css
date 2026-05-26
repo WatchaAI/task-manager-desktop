@@ -293,14 +293,59 @@ h1 {
 }
 
 .task-card {
+  --task-accent: #94a3b8;
+  --task-bg: #ffffff;
+  --task-bg-hover: #f8fafc;
+  --task-border: #e3e8f1;
   display: grid;
   gap: 12px;
+  position: relative;
   min-height: 156px;
-  padding: 14px;
-  border: 1px solid #e3e8f1;
+  overflow: hidden;
+  padding: 14px 14px 14px 18px;
+  border: 1px solid var(--task-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--task-bg);
   box-shadow: 0 8px 22px rgba(33, 43, 64, 0.06);
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.task-card::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--task-accent);
+  content: "";
+}
+
+.task-card:hover {
+  background: var(--task-bg-hover);
+  box-shadow: 0 12px 28px rgba(33, 43, 64, 0.09);
+}
+
+.task-card-todo {
+  --task-accent: #3b82f6;
+  --task-bg: linear-gradient(135deg, #f7fbff 0%, #ffffff 74%);
+  --task-bg-hover: linear-gradient(135deg, #eef6ff 0%, #ffffff 74%);
+  --task-border: #d8e8ff;
+}
+
+.task-card-in_progress {
+  --task-accent: #f59e0b;
+  --task-bg: linear-gradient(135deg, #fffbeb 0%, #ffffff 76%);
+  --task-bg-hover: linear-gradient(135deg, #fff4cf 0%, #ffffff 76%);
+  --task-border: #f6dfab;
+}
+
+.task-card-done {
+  --task-accent: #22c55e;
+  --task-bg: linear-gradient(135deg, #f2fbf5 0%, #ffffff 76%);
+  --task-bg-hover: linear-gradient(135deg, #e6f8ec 0%, #ffffff 76%);
+  --task-border: #ccebd5;
 }
 
 .task-card.dragging {

@@ -327,8 +327,12 @@ function TaskCard({ task, onEdit, onDelete }) {
     transition
   };
 
+  const cardClassName = ['task-card', `task-card-${task.status}`, isDragging ? 'dragging' : '']
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <article ref={setNodeRef} style={style} className={`task-card ${isDragging ? 'dragging' : ''}`}>
+    <article ref={setNodeRef} style={style} className={cardClassName}>
       <div className="task-card-top">
         <h3>{task.title}</h3>
         <button className="icon-button drag-handle" type="button" {...attributes} {...listeners} aria-label="拖拽任务">
