@@ -18,6 +18,7 @@ export function createEmptyTaskForm(now = new Date()) {
     startTime: `${today}T00:00`,
     endTime: `${today}T23:59`,
     description: '',
-    status: 'todo'
+    status: 'todo',
+    subTasks: []
   };
 }

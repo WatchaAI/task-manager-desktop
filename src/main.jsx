@@ -105,6 +105,42 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function createSubTaskId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return `subtask-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeSubTasksForForm(subTasks = []) {
+  if (!Array.isArray(subTasks)) {
+    return [];
+  }
+
+  return subTasks.map((subTask) => ({
+    id: subTask.id || createSubTaskId(),
+    title: subTask.title || '',
+    completed: Boolean(subTask.completed)
+  }));
+}
+
+function cleanSubTasksForSave(subTasks = []) {
+  return normalizeSubTasksForForm(subTasks)
+    .map((subTask) => ({
+      ...subTask,
+      title: subTask.title.trim()
+    }))
+    .filter((subTask) => subTask.title);
+}
+
+function getSubTaskProgress(subTasks = []) {
+  const total = Array.isArray(subTasks) ? subTasks.length : 0;
+  const completed = total ? subTasks.filter((subTask) => subTask.completed).length : 0;
+  const percent = total ? Math.round((completed / total) * 100) : 0;
+
+  return { total, completed, percent };
+}
+
 function App() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -177,6 +213,31 @@ function App() {
       setTasks((current) => normalizeSortOrders(current.filter((task) => task.id !== id)));
     } catch (err) {
       setError(err.message || '删除任务失败');
+    }
+  }
+
+  async function handleToggleSubTask(task, subTaskId) {
+    const subTasks = normalizeSubTasksForForm(task.subTasks).map((subTask) =>
+      subTask.id === subTaskId ? { ...subTask, completed: !subTask.completed } : subTask
+    );
+    const nextTask = { ...task, subTasks };
+
+    setTasks((current) => current.map((item) => (item.id === task.id ? nextTask : item)));
+    try {
+      setError('');
+      const updated = await getTaskApi().updateTask({
+        id: task.id,
+        title: task.title,
+        startTime: task.startTime || '',
+        endTime: task.endTime || '',
+        description: task.description || '',
+        status: task.status || 'todo',
+        subTasks
+      });
+      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (err) {
+      setError(err.message || '保存小任务失败');
+      loadTasks();
     }
   }
 
@@ -269,6 +330,7 @@ function App() {
                 tasks={grouped[status.id]}
                 onEdit={openEditTask}
                 onDelete={handleDeleteTask}
+                onToggleSubTask={handleToggleSubTask}
               />
             ))}
           </section>
@@ -286,7 +348,7 @@ function App() {
   );
 }
 
-function TaskColumn({ status, tasks, onEdit, onDelete }) {
+function TaskColumn({ status, tasks, onEdit, onDelete, onToggleSubTask }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `column:${status.id}`,
     data: { type: 'column', status: status.id }
@@ -308,7 +370,13 @@ function TaskColumn({ status, tasks, onEdit, onDelete }) {
             <div className="empty-state">把任务拖到这里</div>
           ) : (
             tasks.map((task) => (
-              <TaskCard key={task.id} task={task} onEdit={onEdit} onDelete={onDelete} />
+              <TaskCard
+                key={task.id}
+                task={task}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onToggleSubTask={onToggleSubTask}
+              />
             ))
           )}
         </div>
@@ -317,7 +385,7 @@ function TaskColumn({ status, tasks, onEdit, onDelete }) {
   );
 }
 
-function TaskCard({ task, onEdit, onDelete }) {
+function TaskCard({ task, onEdit, onDelete, onToggleSubTask }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: String(task.id),
     data: { type: 'task', status: task.status }
@@ -330,11 +398,23 @@ function TaskCard({ task, onEdit, onDelete }) {
   const cardClassName = ['task-card', `task-card-${task.status}`, isDragging ? 'dragging' : '']
     .filter(Boolean)
     .join(' ');
+  const subTasks = normalizeSubTasksForForm(task.subTasks);
+  const subTaskProgress = getSubTaskProgress(subTasks);
 
   return (
     <article ref={setNodeRef} style={style} className={cardClassName}>
       <div className="task-card-top">
         <h3>{task.title}</h3>
+        {subTaskProgress.total > 0 && (
+          <div
+            className="subtask-progress"
+            style={{ '--progress': subTaskProgress.percent }}
+            aria-label={`小任务完成度 ${subTaskProgress.completed}/${subTaskProgress.total}`}
+            title={`${subTaskProgress.completed}/${subTaskProgress.total}`}
+          >
+            <span>{subTaskProgress.percent}%</span>
+          </div>
+        )}
         <button className="icon-button drag-handle" type="button" {...attributes} {...listeners} aria-label="拖拽任务">
           <GripVertical size={17} />
         </button>
@@ -347,6 +427,20 @@ function TaskCard({ task, onEdit, onDelete }) {
         <p className="task-description">{task.description}</p>
       ) : (
         <p className="task-description muted">没有详细内容</p>
+      )}
+      {subTasks.length > 0 && (
+        <div className="subtask-list" aria-label="小任务列表">
+          {subTasks.map((subTask) => (
+            <label key={subTask.id} className={`subtask-item ${subTask.completed ? 'completed' : ''}`}>
+              <input
+                type="checkbox"
+                checked={subTask.completed}
+                onChange={() => onToggleSubTask(task, subTask.id)}
+              />
+              <span>{subTask.title}</span>
+            </label>
+          ))}
+        </div>
       )}
       <div className="task-actions">
         <button className="ghost-button" type="button" onClick={() => onEdit(task)}>
@@ -363,11 +457,40 @@ function TaskCard({ task, onEdit, onDelete }) {
 }
 
 function TaskModal({ task, onClose, onSave }) {
-  const [form, setForm] = useState(() => task || createEmptyTaskForm());
+  const [form, setForm] = useState(() => ({
+    ...(task || createEmptyTaskForm()),
+    subTasks: normalizeSubTasksForForm(task?.subTasks)
+  }));
   const [formError, setFormError] = useState('');
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function addSubTask() {
+    setForm((current) => ({
+      ...current,
+      subTasks: [
+        ...normalizeSubTasksForForm(current.subTasks),
+        { id: createSubTaskId(), title: '', completed: false }
+      ]
+    }));
+  }
+
+  function updateSubTask(id, patch) {
+    setForm((current) => ({
+      ...current,
+      subTasks: normalizeSubTasksForForm(current.subTasks).map((subTask) =>
+        subTask.id === id ? { ...subTask, ...patch } : subTask
+      )
+    }));
+  }
+
+  function removeSubTask(id) {
+    setForm((current) => ({
+      ...current,
+      subTasks: normalizeSubTasksForForm(current.subTasks).filter((subTask) => subTask.id !== id)
+    }));
   }
 
   function submit(event) {
@@ -382,9 +505,12 @@ function TaskModal({ task, onClose, onSave }) {
       startTime: form.startTime || '',
       endTime: form.endTime || '',
       description: form.description || '',
-      status: form.status || 'todo'
+      status: form.status || 'todo',
+      subTasks: cleanSubTasksForSave(form.subTasks)
     });
   }
+
+  const formSubTasks = normalizeSubTasksForForm(form.subTasks);
 
   return (
     <div className="modal-backdrop" role="presentation">
@@ -445,6 +571,44 @@ function TaskModal({ task, onClose, onSave }) {
             rows={5}
           />
         </label>
+
+        <div className="subtask-editor">
+          <div className="subtask-editor-header">
+            <span>小任务</span>
+            <button className="ghost-button" type="button" onClick={addSubTask}>
+              <Plus size={15} />
+              添加
+            </button>
+          </div>
+          {formSubTasks.length > 0 && (
+            <div className="subtask-editor-list">
+              {formSubTasks.map((subTask, index) => (
+                <div className="subtask-editor-row" key={subTask.id}>
+                  <input
+                    className="subtask-checkbox"
+                    type="checkbox"
+                    checked={subTask.completed}
+                    onChange={(event) => updateSubTask(subTask.id, { completed: event.target.checked })}
+                    aria-label={`完成小任务 ${index + 1}`}
+                  />
+                  <input
+                    value={subTask.title}
+                    onChange={(event) => updateSubTask(subTask.id, { title: event.target.value })}
+                    placeholder="小任务名称"
+                  />
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={() => removeSubTask(subTask.id)}
+                    aria-label="删除小任务"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {formError && <p className="form-error">{formError}</p>}
 

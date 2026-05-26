@@ -14,6 +14,7 @@ function createTaskStore(dbPath) {
       start_time TEXT NOT NULL DEFAULT '',
       end_time TEXT NOT NULL DEFAULT '',
       description TEXT NOT NULL DEFAULT '',
+      sub_tasks TEXT NOT NULL DEFAULT '[]',
       status TEXT NOT NULL CHECK(status IN ('todo', 'in_progress', 'done')),
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
@@ -24,6 +25,50 @@ function createTaskStore(dbPath) {
       ON tasks (status, sort_order, created_at);
   `);
 
+  const columns = db.prepare('PRAGMA table_info(tasks)').all();
+  if (!columns.some((column) => column.name === 'sub_tasks')) {
+    db.prepare("ALTER TABLE tasks ADD COLUMN sub_tasks TEXT NOT NULL DEFAULT '[]'").run();
+  }
+
+  function createSubTaskId(index) {
+    return `subtask-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function parseSubTasks(value) {
+    if (!value) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function normalizeSubTasks(subTasks = []) {
+    if (!Array.isArray(subTasks)) {
+      return [];
+    }
+
+    return subTasks
+      .map((subTask, index) => {
+        const title = String(subTask?.title || '').trim();
+        if (!title) {
+          return null;
+        }
+
+        const id = String(subTask?.id || '').trim() || createSubTaskId(index);
+        return {
+          id,
+          title,
+          completed: Boolean(subTask?.completed)
+        };
+      })
+      .filter(Boolean);
+  }
+
   function rowToTask(row) {
     return {
       id: row.id,
@@ -31,6 +76,7 @@ function createTaskStore(dbPath) {
       startTime: row.start_time,
       endTime: row.end_time,
       description: row.description,
+      subTasks: parseSubTasks(row.sub_tasks),
       status: row.status,
       sortOrder: row.sort_order,
       createdAt: row.created_at,
@@ -58,6 +104,7 @@ function createTaskStore(dbPath) {
       startTime: input.startTime || '',
       endTime: input.endTime || '',
       description: input.description || '',
+      subTasks: normalizeSubTasks(input.subTasks),
       status
     };
   }
@@ -104,12 +151,13 @@ function createTaskStore(dbPath) {
           start_time,
           end_time,
           description,
+          sub_tasks,
           status,
           sort_order,
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
       )
       .run(
@@ -117,6 +165,7 @@ function createTaskStore(dbPath) {
         task.startTime,
         task.endTime,
         task.description,
+        JSON.stringify(task.subTasks),
         task.status,
         nextSortOrder(task.status),
         now,
@@ -141,6 +190,7 @@ function createTaskStore(dbPath) {
           start_time = ?,
           end_time = ?,
           description = ?,
+          sub_tasks = ?,
           status = ?,
           updated_at = ?
       WHERE id = ?
@@ -150,6 +200,7 @@ function createTaskStore(dbPath) {
       task.startTime,
       task.endTime,
       task.description,
+      JSON.stringify(task.subTasks),
       task.status,
       now,
       id

@@ -10,7 +10,8 @@ describe('task form defaults', () => {
       startTime: '2026-05-27T00:00',
       endTime: '2026-05-27T23:59',
       description: '',
-      status: 'todo'
+      status: 'todo',
+      subTasks: []
     });
   });
 });

@@ -32,7 +32,11 @@ describe('task store', () => {
       startTime: '2026-05-26T09:00',
       endTime: '2026-05-26T11:00',
       description: '实现一个可以拖拽的桌面任务看板。',
-      status: 'todo'
+      status: 'todo',
+      subTasks: [
+        { id: 'draft', title: '拆页面结构', completed: true },
+        { id: 'persist', title: '补持久化', completed: false }
+      ]
     });
 
     expect(created).toMatchObject({
@@ -41,7 +45,11 @@ describe('task store', () => {
       endTime: '2026-05-26T11:00',
       description: '实现一个可以拖拽的桌面任务看板。',
       status: 'todo',
-      sortOrder: 0
+      sortOrder: 0,
+      subTasks: [
+        { id: 'draft', title: '拆页面结构', completed: true },
+        { id: 'persist', title: '补持久化', completed: false }
+      ]
     });
 
     const updated = store.updateTask(created.id, {
@@ -49,7 +57,12 @@ describe('task store', () => {
       startTime: '2026-05-26T10:00',
       endTime: '2026-05-26T12:00',
       description: '补齐 SQLite 持久化。',
-      status: 'in_progress'
+      status: 'in_progress',
+      subTasks: [
+        { id: 'draft', title: '拆页面结构', completed: true },
+        { id: 'persist', title: '补持久化', completed: true },
+        { id: 'verify', title: '跑测试', completed: false }
+      ]
     });
 
     expect(updated).toMatchObject({
@@ -58,12 +71,44 @@ describe('task store', () => {
       startTime: '2026-05-26T10:00',
       endTime: '2026-05-26T12:00',
       description: '补齐 SQLite 持久化。',
-      status: 'in_progress'
+      status: 'in_progress',
+      subTasks: [
+        { id: 'draft', title: '拆页面结构', completed: true },
+        { id: 'persist', title: '补持久化', completed: true },
+        { id: 'verify', title: '跑测试', completed: false }
+      ]
     });
 
     expect(store.listTasks()).toHaveLength(1);
     store.deleteTask(created.id);
     expect(store.listTasks()).toEqual([]);
+  });
+
+  it('sanitizes blank subtasks and generates ids for new subtasks', () => {
+    const created = store.createTask({
+      title: '发布版本',
+      startTime: '',
+      endTime: '',
+      description: '',
+      status: 'todo',
+      subTasks: [
+        { title: '打包应用', completed: true },
+        { title: '   ', completed: true },
+        { id: 'ship', title: '通知用户', completed: 1 }
+      ]
+    });
+
+    expect(created.subTasks).toHaveLength(2);
+    expect(created.subTasks[0]).toMatchObject({
+      title: '打包应用',
+      completed: true
+    });
+    expect(created.subTasks[0].id).toEqual(expect.any(String));
+    expect(created.subTasks[1]).toEqual({
+      id: 'ship',
+      title: '通知用户',
+      completed: true
+    });
   });
 
   it('lists tasks grouped by status and ordered by sortOrder', () => {
