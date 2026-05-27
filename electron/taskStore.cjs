@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 
 const STATUSES = new Set(['todo', 'in_progress', 'done']);
+const DEFAULT_TASK_TYPES = ['工作', '学习', '日常'];
 
 function createTaskStore(dbPath) {
   const db = new Database(dbPath);
@@ -8,8 +9,17 @@ function createTaskStore(dbPath) {
   db.pragma('foreign_keys = ON');
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS task_types (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type_id INTEGER NOT NULL DEFAULT 1,
       title TEXT NOT NULL,
       start_time TEXT NOT NULL DEFAULT '',
       end_time TEXT NOT NULL DEFAULT '',
@@ -18,16 +28,48 @@ function createTaskStore(dbPath) {
       status TEXT NOT NULL CHECK(status IN ('todo', 'in_progress', 'done')),
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (type_id) REFERENCES task_types(id) ON DELETE CASCADE
     );
-
-    CREATE INDEX IF NOT EXISTS idx_tasks_status_sort
-      ON tasks (status, sort_order, created_at);
   `);
+
+  seedDefaultTaskTypes();
 
   const columns = db.prepare('PRAGMA table_info(tasks)').all();
   if (!columns.some((column) => column.name === 'sub_tasks')) {
     db.prepare("ALTER TABLE tasks ADD COLUMN sub_tasks TEXT NOT NULL DEFAULT '[]'").run();
+  }
+  if (!columns.some((column) => column.name === 'type_id')) {
+    db.prepare("ALTER TABLE tasks ADD COLUMN type_id INTEGER NOT NULL DEFAULT 1").run();
+  }
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_task_types_sort
+      ON task_types (sort_order, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_tasks_status_sort
+      ON tasks (status, sort_order, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_tasks_type_status_sort
+      ON tasks (type_id, status, sort_order, created_at);
+  `);
+
+  function seedDefaultTaskTypes() {
+    const row = db.prepare('SELECT COUNT(*) AS count FROM task_types').get();
+    if (row.count > 0) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const statement = db.prepare(
+      `
+      INSERT INTO task_types (name, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
+    `
+    );
+    DEFAULT_TASK_TYPES.forEach((name, index) => {
+      statement.run(name, index, now, now);
+    });
   }
 
   function createSubTaskId(index) {
@@ -72,6 +114,7 @@ function createTaskStore(dbPath) {
   function rowToTask(row) {
     return {
       id: row.id,
+      typeId: row.type_id,
       title: row.title,
       startTime: row.start_time,
       endTime: row.end_time,
@@ -84,10 +127,40 @@ function createTaskStore(dbPath) {
     };
   }
 
+  function rowToTaskType(row) {
+    return {
+      id: row.id,
+      name: row.name,
+      sortOrder: row.sort_order,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+
   function assertStatus(status) {
     if (!STATUSES.has(status)) {
       throw new Error(`Invalid task status: ${status}`);
     }
+  }
+
+  function assertTaskType(typeId) {
+    const row = db.prepare('SELECT id FROM task_types WHERE id = ?').get(typeId);
+    if (!row) {
+      throw new Error(`Invalid task type: ${typeId}`);
+    }
+  }
+
+  function getDefaultTaskTypeId() {
+    const row = db.prepare('SELECT id FROM task_types ORDER BY sort_order ASC, created_at ASC LIMIT 1').get();
+    return row.id;
+  }
+
+  function normalizeTaskTypeInput(input) {
+    const name = String(input.name || '').trim();
+    if (!name) {
+      throw new Error('Task type name is required');
+    }
+    return { name };
   }
 
   function normalizeTaskInput(input) {
@@ -98,8 +171,11 @@ function createTaskStore(dbPath) {
 
     const status = input.status || 'todo';
     assertStatus(status);
+    const typeId = Number(input.typeId || getDefaultTaskTypeId());
+    assertTaskType(typeId);
 
     return {
+      typeId,
       title,
       startTime: input.startTime || '',
       endTime: input.endTime || '',
@@ -114,12 +190,98 @@ function createTaskStore(dbPath) {
     return row ? rowToTask(row) : null;
   }
 
-  function listTasks() {
+  function listTaskTypes() {
+    return db
+      .prepare(
+        `
+        SELECT * FROM task_types
+        ORDER BY sort_order ASC, created_at ASC
+      `
+      )
+      .all()
+      .map(rowToTaskType);
+  }
+
+  function nextTaskTypeSortOrder() {
+    const row = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM task_types').get();
+    return row.next_order;
+  }
+
+  function createTaskType(input) {
+    const taskType = normalizeTaskTypeInput(input);
+    const now = new Date().toISOString();
+    const result = db
+      .prepare(
+        `
+        INSERT INTO task_types (name, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+      `
+      )
+      .run(taskType.name, nextTaskTypeSortOrder(), now, now);
+
+    return rowToTaskType(db.prepare('SELECT * FROM task_types WHERE id = ?').get(result.lastInsertRowid));
+  }
+
+  function getTaskType(id) {
+    const row = db.prepare('SELECT * FROM task_types WHERE id = ?').get(id);
+    return row ? rowToTaskType(row) : null;
+  }
+
+  function updateTaskType(id, input) {
+    const existing = getTaskType(id);
+    if (!existing) {
+      throw new Error(`Task type not found: ${id}`);
+    }
+
+    const taskType = normalizeTaskTypeInput(input);
+    const now = new Date().toISOString();
+    db.prepare(
+      `
+      UPDATE task_types
+      SET name = ?,
+          updated_at = ?
+      WHERE id = ?
+    `
+    ).run(taskType.name, now, id);
+
+    return getTaskType(id);
+  }
+
+  function deleteTaskType(id) {
+    const existing = getTaskType(id);
+    if (!existing) {
+      throw new Error(`Task type not found: ${id}`);
+    }
+
+    const count = db.prepare('SELECT COUNT(*) AS count FROM task_types').get().count;
+    if (count <= 1) {
+      throw new Error('Cannot delete the last task type');
+    }
+
+    db.prepare('DELETE FROM tasks WHERE type_id = ?').run(id);
+    db.prepare('DELETE FROM task_types WHERE id = ?').run(id);
+    return { ok: true };
+  }
+
+  function listTasks(typeId) {
+    const filters = [];
+    const values = [];
+
+    if (typeId !== undefined && typeId !== null) {
+      const normalizedTypeId = Number(typeId);
+      assertTaskType(normalizedTypeId);
+      filters.push('type_id = ?');
+      values.push(normalizedTypeId);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     return db
       .prepare(
         `
         SELECT * FROM tasks
+        ${whereClause}
         ORDER BY
+          type_id ASC,
           CASE status
             WHEN 'todo' THEN 0
             WHEN 'in_progress' THEN 1
@@ -129,14 +291,14 @@ function createTaskStore(dbPath) {
           created_at ASC
       `
       )
-      .all()
+      .all(...values)
       .map(rowToTask);
   }
 
-  function nextSortOrder(status) {
+  function nextSortOrder(typeId, status) {
     const row = db
-      .prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM tasks WHERE status = ?')
-      .get(status);
+      .prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM tasks WHERE type_id = ? AND status = ?')
+      .get(typeId, status);
     return row.next_order;
   }
 
@@ -147,6 +309,7 @@ function createTaskStore(dbPath) {
       .prepare(
         `
         INSERT INTO tasks (
+          type_id,
           title,
           start_time,
           end_time,
@@ -157,17 +320,18 @@ function createTaskStore(dbPath) {
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
       )
       .run(
+        task.typeId,
         task.title,
         task.startTime,
         task.endTime,
         task.description,
         JSON.stringify(task.subTasks),
         task.status,
-        nextSortOrder(task.status),
+        nextSortOrder(task.typeId, task.status),
         now,
         now
       );
@@ -186,7 +350,8 @@ function createTaskStore(dbPath) {
     db.prepare(
       `
       UPDATE tasks
-      SET title = ?,
+      SET type_id = ?,
+          title = ?,
           start_time = ?,
           end_time = ?,
           description = ?,
@@ -196,6 +361,7 @@ function createTaskStore(dbPath) {
       WHERE id = ?
     `
     ).run(
+      task.typeId,
       task.title,
       task.startTime,
       task.endTime,
@@ -218,7 +384,8 @@ function createTaskStore(dbPath) {
     const statement = db.prepare(
       `
       UPDATE tasks
-      SET status = ?,
+      SET type_id = ?,
+          status = ?,
           sort_order = ?,
           updated_at = ?
       WHERE id = ?
@@ -227,8 +394,14 @@ function createTaskStore(dbPath) {
 
     const now = new Date().toISOString();
     for (const item of items) {
+      const existing = getTask(item.id);
+      if (!existing) {
+        throw new Error(`Task not found: ${item.id}`);
+      }
+      const typeId = Number(item.typeId || existing.typeId);
+      assertTaskType(typeId);
       assertStatus(item.status);
-      statement.run(item.status, item.sortOrder, now, item.id);
+      statement.run(typeId, item.status, item.sortOrder, now, item.id);
     }
   });
 
@@ -243,6 +416,10 @@ function createTaskStore(dbPath) {
 
   return {
     db,
+    listTaskTypes,
+    createTaskType,
+    updateTaskType,
+    deleteTaskType,
     listTasks,
     createTask,
     updateTask,

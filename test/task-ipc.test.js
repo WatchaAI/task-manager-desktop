@@ -22,7 +22,11 @@ describe('task IPC handlers', () => {
   it('registers CRUD and reorder channels', async () => {
     const ipcMain = createFakeIpcMain();
     const store = {
-      listTasks: vi.fn(() => [{ id: 1, title: '任务', status: 'todo', sortOrder: 0 }]),
+      listTaskTypes: vi.fn(() => [{ id: 1, name: '工作', sortOrder: 0 }]),
+      createTaskType: vi.fn((taskType) => ({ id: 2, sortOrder: 1, ...taskType })),
+      updateTaskType: vi.fn((id, taskType) => ({ id, sortOrder: 0, ...taskType })),
+      deleteTaskType: vi.fn((id) => ({ ok: true, id })),
+      listTasks: vi.fn(() => [{ id: 1, typeId: 1, title: '任务', status: 'todo', sortOrder: 0 }]),
       createTask: vi.fn((task) => ({ id: 2, ...task })),
       updateTask: vi.fn((id, task) => ({ id, ...task })),
       deleteTask: vi.fn((id) => ({ ok: true, id })),
@@ -31,9 +35,22 @@ describe('task IPC handlers', () => {
 
     registerTaskHandlers(ipcMain, store);
 
-    expect(await ipcMain.invoke('tasks:list')).toEqual([
-      { id: 1, title: '任务', status: 'todo', sortOrder: 0 }
+    expect(await ipcMain.invoke('taskTypes:list')).toEqual([{ id: 1, name: '工作', sortOrder: 0 }]);
+    expect(await ipcMain.invoke('taskTypes:create', { name: '副业' })).toEqual({
+      id: 2,
+      sortOrder: 1,
+      name: '副业'
+    });
+    expect(await ipcMain.invoke('taskTypes:update', { id: 1, name: '项目' })).toEqual({
+      id: 1,
+      sortOrder: 0,
+      name: '项目'
+    });
+    expect(await ipcMain.invoke('taskTypes:delete', 1)).toEqual({ ok: true, id: 1 });
+    expect(await ipcMain.invoke('tasks:list', 1)).toEqual([
+      { id: 1, typeId: 1, title: '任务', status: 'todo', sortOrder: 0 }
     ]);
+    expect(store.listTasks).toHaveBeenCalledWith(1);
     expect(await ipcMain.invoke('tasks:create', { title: '新任务', status: 'todo' })).toEqual({
       id: 2,
       title: '新任务',

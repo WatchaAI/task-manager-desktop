@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   closestCorners,
@@ -22,6 +22,7 @@ import {
   Circle,
   Clock3,
   GripVertical,
+  Layers2,
   LoaderCircle,
   Pencil,
   Plus,
@@ -142,11 +143,15 @@ function getSubTaskProgress(subTasks = []) {
 }
 
 function App() {
+  const [taskTypes, setTaskTypes] = useState([]);
+  const [activeTypeId, setActiveTypeId] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modalTask, setModalTask] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [editingTypeId, setEditingTypeId] = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -161,12 +166,35 @@ function App() {
   const totalTasks = tasks.length;
   const doneTasks = grouped.done.length;
   const activeTasks = grouped.todo.length + grouped.in_progress.length;
+  const activeType = taskTypes.find((type) => type.id === activeTypeId);
 
-  async function loadTasks() {
+  async function loadInitialData() {
     try {
       setLoading(true);
       setError('');
-      const loadedTasks = await getTaskApi().listTasks();
+      const loadedTypes = await getTaskApi().listTaskTypes();
+      const nextTypeId = loadedTypes[0]?.id || null;
+      const loadedTasks = nextTypeId ? await getTaskApi().listTasks(nextTypeId) : [];
+      setTaskTypes(loadedTypes);
+      setActiveTypeId(nextTypeId);
+      setTasks(loadedTasks);
+    } catch (err) {
+      setError(err.message || '加载任务失败');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadTasks(typeId = activeTypeId) {
+    if (!typeId) {
+      setTasks([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      const loadedTasks = await getTaskApi().listTasks(typeId);
       setTasks(loadedTasks);
     } catch (err) {
       setError(err.message || '加载任务失败');
@@ -176,10 +204,14 @@ function App() {
   }
 
   useEffect(() => {
-    loadTasks();
+    loadInitialData();
   }, []);
 
   function openNewTask() {
+    if (!activeTypeId) {
+      setError('请先创建一个任务类型');
+      return;
+    }
     setModalTask(null);
     setIsModalOpen(true);
   }
@@ -192,11 +224,12 @@ function App() {
   async function handleSaveTask(taskInput) {
     try {
       setError('');
+      const typeId = modalTask?.typeId || activeTypeId;
       if (modalTask) {
-        const updated = await getTaskApi().updateTask({ id: modalTask.id, ...taskInput });
+        const updated = await getTaskApi().updateTask({ id: modalTask.id, ...taskInput, typeId });
         setTasks((current) => current.map((task) => (task.id === updated.id ? updated : task)));
       } else {
-        const created = await getTaskApi().createTask(taskInput);
+        const created = await getTaskApi().createTask({ ...taskInput, typeId });
         setTasks((current) => normalizeSortOrders([...current, created]));
       }
       setIsModalOpen(false);
@@ -228,6 +261,7 @@ function App() {
       const updated = await getTaskApi().updateTask({
         id: task.id,
         title: task.title,
+        typeId: task.typeId || activeTypeId,
         startTime: task.startTime || '',
         endTime: task.endTime || '',
         description: task.description || '',
@@ -237,7 +271,104 @@ function App() {
       setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     } catch (err) {
       setError(err.message || '保存小任务失败');
-      loadTasks();
+      loadTasks(activeTypeId);
+    }
+  }
+
+  async function handleSelectType(typeId) {
+    if (typeId === activeTypeId) {
+      return;
+    }
+
+    setActiveTypeId(typeId);
+    await loadTasks(typeId);
+  }
+
+  async function handleTypeFormSubmit(event) {
+    event.preventDefault();
+    if (editingTypeId) {
+      await handleSaveTypeName();
+      return;
+    }
+    await handleCreateType();
+  }
+
+  async function handleCreateType() {
+    const name = newTypeName.trim();
+    if (!name) {
+      return;
+    }
+
+    try {
+      setError('');
+      const created = await getTaskApi().createTaskType({ name });
+      setTaskTypes((current) => [...current, created]);
+      setNewTypeName('');
+      setActiveTypeId(created.id);
+      setTasks([]);
+    } catch (err) {
+      setError(err.message || '创建类型失败');
+    }
+  }
+
+  function startEditType(type) {
+    setEditingTypeId(type.id);
+    setNewTypeName(type.name);
+  }
+
+  async function handleSaveTypeName() {
+    const name = newTypeName.trim();
+    if (!editingTypeId || !name) {
+      return;
+    }
+
+    try {
+      setError('');
+      const updated = await getTaskApi().updateTaskType({ id: editingTypeId, name });
+      setTaskTypes((current) => current.map((type) => (type.id === updated.id ? updated : type)));
+      setEditingTypeId(null);
+      setNewTypeName('');
+    } catch (err) {
+      setError(err.message || '修改类型失败');
+    }
+  }
+
+  function cancelEditType() {
+    setEditingTypeId(null);
+    setNewTypeName('');
+  }
+
+  async function handleDeleteType(type) {
+    if (taskTypes.length <= 1) {
+      setError('至少保留一个任务类型');
+      return;
+    }
+
+    const taskCount = type.id === activeTypeId ? totalTasks : null;
+    const taskHint =
+      taskCount === null
+        ? '该类型下的任务也会一起删除。'
+        : `该类型下的 ${taskCount} 个任务也会一起删除。`;
+    if (!window.confirm(`删除「${type.name}」？${taskHint}`)) {
+      return;
+    }
+
+    try {
+      setError('');
+      await getTaskApi().deleteTaskType(type.id);
+      const remainingTypes = taskTypes.filter((item) => item.id !== type.id);
+      setTaskTypes(remainingTypes);
+      if (editingTypeId === type.id) {
+        cancelEditType();
+      }
+
+      if (type.id === activeTypeId) {
+        const nextTypeId = remainingTypes[0]?.id || null;
+        setActiveTypeId(nextTypeId);
+        await loadTasks(nextTypeId);
+      }
+    } catch (err) {
+      setError(err.message || '删除类型失败');
     }
   }
 
@@ -279,13 +410,14 @@ function App() {
       await getTaskApi().reorderTasks(
         normalized.map((task) => ({
           id: task.id,
+          typeId: task.typeId || activeTypeId,
           status: task.status,
           sortOrder: task.sortOrder
         }))
       );
     } catch (err) {
       setError(err.message || '保存排序失败');
-      loadTasks();
+      loadTasks(activeTypeId);
     }
   }
 
@@ -294,7 +426,7 @@ function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Local SQLite Board</p>
-          <h1>任务管理</h1>
+          <h1>{activeType ? `${activeType.name}任务` : '任务管理'}</h1>
         </div>
         <div className="topbar-actions">
           <div className="stats" aria-label="任务统计">
@@ -302,12 +434,66 @@ function App() {
             <span>{activeTasks} 个未完成</span>
             <span>{doneTasks} 个完成</span>
           </div>
-          <button className="primary-button" type="button" onClick={openNewTask}>
+          <button className="primary-button" type="button" onClick={openNewTask} disabled={!activeTypeId}>
             <Plus size={18} />
             新增任务
           </button>
         </div>
       </header>
+
+      <section className="type-toolbar" aria-label="任务类型">
+        <div className="type-tabs" role="tablist" aria-label="切换任务类型">
+          {taskTypes.map((type) => (
+            <div key={type.id} className={`type-tab ${type.id === activeTypeId ? 'active' : ''}`}>
+              <button
+                className="type-tab-main"
+                type="button"
+                role="tab"
+                aria-selected={type.id === activeTypeId}
+                onClick={() => handleSelectType(type.id)}
+              >
+                <Layers2 size={15} />
+                {type.name}
+              </button>
+              <button className="type-action-button" type="button" onClick={() => startEditType(type)} aria-label="修改类型名称">
+                <Pencil size={13} />
+              </button>
+              <button
+                className="type-action-button danger"
+                type="button"
+                onClick={() => handleDeleteType(type)}
+                aria-label="删除类型"
+                disabled={taskTypes.length <= 1}
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <form className="type-form" onSubmit={handleTypeFormSubmit}>
+          <input
+            value={newTypeName}
+            onChange={(event) => setNewTypeName(event.target.value)}
+            placeholder={editingTypeId ? '类型名称' : '新类型'}
+            aria-label="新任务类型名称"
+          />
+          {editingTypeId ? (
+            <div className="type-form-actions">
+              <button className="secondary-button" type="button" onClick={cancelEditType}>
+                取消
+              </button>
+              <button className="primary-button compact" type="button" onClick={handleSaveTypeName}>
+                保存
+              </button>
+            </div>
+          ) : (
+            <button className="secondary-button" type="submit">
+              <Plus size={16} />
+              添加类型
+            </button>
+          )}
+        </form>
+      </section>
 
       {error && (
         <div className="alert" role="alert">
@@ -462,17 +648,22 @@ function TaskModal({ task, onClose, onSave }) {
     subTasks: normalizeSubTasksForForm(task?.subTasks)
   }));
   const [formError, setFormError] = useState('');
+  const subTaskListRef = useRef(null);
+  const subTaskInputRefs = useRef(new Map());
+  const pendingSubTaskIdRef = useRef(null);
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
   function addSubTask() {
+    const id = createSubTaskId();
+    pendingSubTaskIdRef.current = id;
     setForm((current) => ({
       ...current,
       subTasks: [
         ...normalizeSubTasksForForm(current.subTasks),
-        { id: createSubTaskId(), title: '', completed: false }
+        { id, title: '', completed: false }
       ]
     }));
   }
@@ -511,6 +702,24 @@ function TaskModal({ task, onClose, onSave }) {
   }
 
   const formSubTasks = normalizeSubTasksForForm(form.subTasks);
+
+  useEffect(() => {
+    const pendingId = pendingSubTaskIdRef.current;
+    if (!pendingId) {
+      return undefined;
+    }
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      subTaskListRef.current?.scrollTo({
+        top: subTaskListRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+      subTaskInputRefs.current.get(pendingId)?.focus();
+      pendingSubTaskIdRef.current = null;
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [formSubTasks.length]);
 
   return (
     <div className="modal-backdrop" role="presentation">
@@ -581,7 +790,7 @@ function TaskModal({ task, onClose, onSave }) {
             </button>
           </div>
           {formSubTasks.length > 0 && (
-            <div className="subtask-editor-list">
+            <div className="subtask-editor-list" ref={subTaskListRef}>
               {formSubTasks.map((subTask, index) => (
                 <div className="subtask-editor-row" key={subTask.id}>
                   <input
@@ -592,6 +801,13 @@ function TaskModal({ task, onClose, onSave }) {
                     aria-label={`完成小任务 ${index + 1}`}
                   />
                   <input
+                    ref={(node) => {
+                      if (node) {
+                        subTaskInputRefs.current.set(subTask.id, node);
+                      } else {
+                        subTaskInputRefs.current.delete(subTask.id);
+                      }
+                    }}
                     value={subTask.title}
                     onChange={(event) => updateSubTask(subTask.id, { title: event.target.value })}
                     placeholder="小任务名称"
