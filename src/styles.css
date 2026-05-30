@@ -458,6 +458,7 @@ h1 {
   --task-bg: #ffffff;
   --task-bg-hover: #f8fafc;
   --task-border: #e3e8f1;
+  flex: 0 0 auto;
   display: grid;
   gap: 12px;
   position: relative;

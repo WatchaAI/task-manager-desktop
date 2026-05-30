@@ -16,6 +16,7 @@ describe('board column scrolling', () => {
     expect(styles).toMatch(/\.board\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;/s);
     expect(styles).toMatch(/\.column\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*min-height:\s*0;/s);
     expect(styles).toMatch(/\.task-list\s*\{[^}]*flex:\s*1 1 0;[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*overflow-y:\s*auto;/s);
+    expect(styles).toMatch(/\.task-card\s*\{[^}]*flex:\s*0 0 auto;/s);
   });
 
   it('makes each task list an explicitly focusable scroll region', () => {
