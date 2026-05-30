@@ -424,8 +424,8 @@ h1 {
 
 .task-list {
   flex: 1 1 0;
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   min-height: 0;
   overflow-y: auto;

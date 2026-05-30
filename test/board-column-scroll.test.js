@@ -15,7 +15,7 @@ describe('board column scrolling', () => {
   it('lets the board fill the remaining height and each task list scroll internally', () => {
     expect(styles).toMatch(/\.board\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;/s);
     expect(styles).toMatch(/\.column\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*min-height:\s*0;/s);
-    expect(styles).toMatch(/\.task-list\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s);
+    expect(styles).toMatch(/\.task-list\s*\{[^}]*flex:\s*1 1 0;[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*overflow-y:\s*auto;/s);
   });
 
   it('makes each task list an explicitly focusable scroll region', () => {
