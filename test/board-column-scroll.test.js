@@ -21,6 +21,10 @@ describe('board column scrolling', () => {
   it('makes each task list an explicitly focusable scroll region', () => {
     expect(mainSource).toContain('tabIndex={0}');
     expect(mainSource).toContain('aria-label={`${status.label}任务列表`}');
+    expect(mainSource).toContain('onWheel={handleTaskListWheel}');
+    expect(mainSource).toContain('onKeyDown={handleTaskListKeyDown}');
+    expect(mainSource).toContain('event.currentTarget.scrollTop += event.deltaY');
+    expect(mainSource).toContain("case 'PageDown':");
     expect(styles).toMatch(/\.task-list\s*\{[^}]*overscroll-behavior:\s*contain;/s);
     expect(styles).toMatch(/\.task-list:focus-visible\s*\{[^}]*outline:/s);
   });

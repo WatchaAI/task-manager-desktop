@@ -534,6 +534,54 @@ function App() {
   );
 }
 
+function handleTaskListWheel(event) {
+  const list = event.currentTarget;
+  if (list.scrollHeight <= list.clientHeight) {
+    return;
+  }
+
+  const previousScrollTop = list.scrollTop;
+  event.currentTarget.scrollTop += event.deltaY;
+  if (list.scrollTop !== previousScrollTop) {
+    event.preventDefault();
+  }
+}
+
+function handleTaskListKeyDown(event) {
+  const list = event.currentTarget;
+  const pageStep = Math.max(list.clientHeight - 40, 80);
+  const keySteps = {
+    ArrowDown: 48,
+    ArrowUp: -48,
+    PageDown: pageStep,
+    PageUp: -pageStep
+  };
+
+  switch (event.key) {
+    case 'ArrowDown':
+    case 'ArrowUp':
+    case 'PageDown':
+    case 'PageUp':
+      scrollTaskList(list, keySteps[event.key]);
+      event.preventDefault();
+      break;
+    case 'Home':
+      list.scrollTop = 0;
+      event.preventDefault();
+      break;
+    case 'End':
+      list.scrollTop = list.scrollHeight;
+      event.preventDefault();
+      break;
+    default:
+      break;
+  }
+}
+
+function scrollTaskList(list, delta) {
+  list.scrollTop += delta;
+}
+
 function TaskColumn({ status, tasks, onEdit, onDelete, onToggleSubTask }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `column:${status.id}`,
@@ -551,7 +599,13 @@ function TaskColumn({ status, tasks, onEdit, onDelete, onToggleSubTask }) {
         <span className="count-badge">{tasks.length}</span>
       </div>
       <SortableContext items={tasks.map((task) => String(task.id))} strategy={verticalListSortingStrategy}>
-        <div className="task-list" tabIndex={0} aria-label={`${status.label}任务列表`}>
+        <div
+          className="task-list"
+          tabIndex={0}
+          aria-label={`${status.label}任务列表`}
+          onWheel={handleTaskListWheel}
+          onKeyDown={handleTaskListKeyDown}
+        >
           {tasks.length === 0 ? (
             <div className="empty-state">把任务拖到这里</div>
           ) : (
