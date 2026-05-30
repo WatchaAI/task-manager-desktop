@@ -423,7 +423,7 @@ h1 {
 }
 
 .task-list {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   display: grid;
   align-content: start;
   gap: 10px;
