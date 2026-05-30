@@ -551,7 +551,7 @@ function TaskColumn({ status, tasks, onEdit, onDelete, onToggleSubTask }) {
         <span className="count-badge">{tasks.length}</span>
       </div>
       <SortableContext items={tasks.map((task) => String(task.id))} strategy={verticalListSortingStrategy}>
-        <div className="task-list">
+        <div className="task-list" tabIndex={0} aria-label={`${status.label}任务列表`}>
           {tasks.length === 0 ? (
             <div className="empty-state">把任务拖到这里</div>
           ) : (

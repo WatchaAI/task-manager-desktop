@@ -429,9 +429,15 @@ h1 {
   gap: 10px;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding-right: 3px;
   scrollbar-color: #b7c4d8 transparent;
   scrollbar-gutter: stable;
+}
+
+.task-list:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 3px;
 }
 
 .empty-state {
