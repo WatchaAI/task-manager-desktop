@@ -1,0 +1,55 @@
+name: Windows Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: GitHub Release tag to upload assets to
+        required: true
+        default: v0.1.0
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Rebuild native modules for Electron
+        run: npx electron-rebuild -v 39.8.10 -f -w better-sqlite3
+
+      - name: Package Windows app
+        run: npx electron-builder --win zip --x64 --config.npmRebuild=false --publish never
+
+      - name: Upload assets to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        shell: pwsh
+        run: |
+          $assets = Get-ChildItem -Path release -Filter '*.zip'
+          if ($assets.Count -eq 0) {
+            throw 'No Windows zip assets were produced.'
+          }
+          foreach ($asset in $assets) {
+            gh release upload $env:RELEASE_TAG $asset.FullName --clobber
+          }
