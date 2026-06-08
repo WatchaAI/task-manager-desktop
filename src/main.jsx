@@ -17,6 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  AlertTriangle,
   CalendarDays,
   CheckCircle2,
   Circle,
@@ -150,6 +151,8 @@ function App() {
   const [error, setError] = useState('');
   const [modalTask, setModalTask] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [taskPendingDelete, setTaskPendingDelete] = useState(null);
+  const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
   const [editingTypeId, setEditingTypeId] = useState(null);
 
@@ -239,13 +242,25 @@ function App() {
     }
   }
 
-  async function handleDeleteTask(id) {
+  function handleRequestDeleteTask(task) {
+    setTaskPendingDelete(task);
+  }
+
+  async function handleConfirmDeleteTask() {
+    if (!taskPendingDelete || isDeletingTask) {
+      return;
+    }
+
     try {
+      setIsDeletingTask(true);
       setError('');
-      await getTaskApi().deleteTask(id);
-      setTasks((current) => normalizeSortOrders(current.filter((task) => task.id !== id)));
+      await getTaskApi().deleteTask(taskPendingDelete.id);
+      setTasks((current) => normalizeSortOrders(current.filter((task) => task.id !== taskPendingDelete.id)));
+      setTaskPendingDelete(null);
     } catch (err) {
       setError(err.message || '删除任务失败');
+    } finally {
+      setIsDeletingTask(false);
     }
   }
 
@@ -515,7 +530,7 @@ function App() {
                 status={status}
                 tasks={grouped[status.id]}
                 onEdit={openEditTask}
-                onDelete={handleDeleteTask}
+                onDelete={handleRequestDeleteTask}
                 onToggleSubTask={handleToggleSubTask}
               />
             ))}
@@ -528,6 +543,15 @@ function App() {
           task={modalTask}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveTask}
+        />
+      )}
+
+      {taskPendingDelete && (
+        <ConfirmDeleteTaskDialog
+          task={taskPendingDelete}
+          onCancel={() => setTaskPendingDelete(null)}
+          onConfirm={handleConfirmDeleteTask}
+          isDeleting={isDeletingTask}
         />
       )}
     </main>
@@ -687,7 +711,7 @@ function TaskCard({ task, onEdit, onDelete, onToggleSubTask }) {
           <Pencil size={15} />
           编辑
         </button>
-        <button className="ghost-button danger" type="button" onClick={() => onDelete(task.id)}>
+        <button className="ghost-button danger" type="button" onClick={() => onDelete(task)}>
           <Trash2 size={15} />
           删除
         </button>
@@ -892,6 +916,31 @@ function TaskModal({ task, onClose, onSave }) {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function ConfirmDeleteTaskDialog({ task, onCancel, onConfirm, isDeleting }) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-task-title">
+        <div className="confirm-icon" aria-hidden="true">
+          <AlertTriangle size={22} />
+        </div>
+        <div className="confirm-content">
+          <h2 id="delete-task-title">删除「{task.title}」？</h2>
+          <p>删除后无法直接恢复，请确认这不是误触。</p>
+        </div>
+        <div className="confirm-actions">
+          <button className="secondary-button" type="button" onClick={onCancel} disabled={isDeleting} autoFocus>
+            取消
+          </button>
+          <button className="primary-button danger" type="button" onClick={onConfirm} disabled={isDeleting}>
+            <Trash2 size={17} />
+            {isDeleting ? '删除中' : '确认删除'}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
