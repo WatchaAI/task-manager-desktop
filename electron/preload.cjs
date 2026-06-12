@@ -9,5 +9,14 @@ contextBridge.exposeInMainWorld('taskApi', {
   createTask: (task) => ipcRenderer.invoke('tasks:create', task),
   updateTask: (payload) => ipcRenderer.invoke('tasks:update', payload),
   deleteTask: (id) => ipcRenderer.invoke('tasks:delete', id),
-  reorderTasks: (items) => ipcRenderer.invoke('tasks:reorder', items)
+  reorderTasks: (items) => ipcRenderer.invoke('tasks:reorder', items),
+  onTasksChanged: (callback) => {
+    if (typeof callback !== 'function') {
+      return () => {};
+    }
+
+    const listener = () => callback();
+    ipcRenderer.on('tasks:changed', listener);
+    return () => ipcRenderer.removeListener('tasks:changed', listener);
+  }
 });

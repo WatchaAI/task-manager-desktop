@@ -27,6 +27,7 @@ import {
   LoaderCircle,
   Pencil,
   Plus,
+  RefreshCw,
   Trash2,
   X
 } from 'lucide-react';
@@ -155,6 +156,8 @@ function App() {
   const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
   const [editingTypeId, setEditingTypeId] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const activeTypeIdRef = useRef(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -171,15 +174,20 @@ function App() {
   const activeTasks = grouped.todo.length + grouped.in_progress.length;
   const activeType = taskTypes.find((type) => type.id === activeTypeId);
 
-  async function loadInitialData() {
+  async function loadBoardData({ preferredTypeId = activeTypeIdRef.current, showLoading = true } = {}) {
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       setError('');
       const loadedTypes = await getTaskApi().listTaskTypes();
-      const nextTypeId = loadedTypes[0]?.id || null;
+      const nextTypeId = loadedTypes.some((type) => type.id === preferredTypeId)
+        ? preferredTypeId
+        : loadedTypes[0]?.id || null;
       const loadedTasks = nextTypeId ? await getTaskApi().listTasks(nextTypeId) : [];
       setTaskTypes(loadedTypes);
       setActiveTypeId(nextTypeId);
+      activeTypeIdRef.current = nextTypeId;
       setTasks(loadedTasks);
     } catch (err) {
       setError(err.message || '加载任务失败');
@@ -207,8 +215,28 @@ function App() {
   }
 
   useEffect(() => {
-    loadInitialData();
+    loadBoardData();
   }, []);
+
+  useEffect(() => {
+    activeTypeIdRef.current = activeTypeId;
+  }, [activeTypeId]);
+
+  useEffect(() => {
+    const unsubscribe = getTaskApi().onTasksChanged?.(() => {
+      loadBoardData({ preferredTypeId: activeTypeIdRef.current, showLoading: false });
+    });
+    return unsubscribe;
+  }, []);
+
+  async function handleRefresh() {
+    try {
+      setIsRefreshing(true);
+      await loadBoardData({ preferredTypeId: activeTypeIdRef.current, showLoading: false });
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
 
   function openNewTask() {
     if (!activeTypeId) {
@@ -296,6 +324,7 @@ function App() {
     }
 
     setActiveTypeId(typeId);
+    activeTypeIdRef.current = typeId;
     await loadTasks(typeId);
   }
 
@@ -320,6 +349,7 @@ function App() {
       setTaskTypes((current) => [...current, created]);
       setNewTypeName('');
       setActiveTypeId(created.id);
+      activeTypeIdRef.current = created.id;
       setTasks([]);
     } catch (err) {
       setError(err.message || '创建类型失败');
@@ -380,6 +410,7 @@ function App() {
       if (type.id === activeTypeId) {
         const nextTypeId = remainingTypes[0]?.id || null;
         setActiveTypeId(nextTypeId);
+        activeTypeIdRef.current = nextTypeId;
         await loadTasks(nextTypeId);
       }
     } catch (err) {
@@ -449,6 +480,16 @@ function App() {
             <span>{activeTasks} 个未完成</span>
             <span>{doneTasks} 个完成</span>
           </div>
+          <button
+            className="secondary-button refresh-button"
+            type="button"
+            onClick={handleRefresh}
+            disabled={loading || isRefreshing}
+            title="刷新任务"
+          >
+            <RefreshCw size={17} className={isRefreshing ? 'spin-icon' : ''} />
+            刷新
+          </button>
           <button className="primary-button" type="button" onClick={openNewTask} disabled={!activeTypeId}>
             <Plus size={18} />
             新增任务

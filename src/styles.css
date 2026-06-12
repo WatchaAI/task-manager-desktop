@@ -168,6 +168,14 @@ h1 {
   background: #f5f7fb;
 }
 
+.refresh-button {
+  min-width: 82px;
+}
+
+.spin-icon {
+  animation: spin 1.1s linear infinite;
+}
+
 .ghost-button {
   gap: 6px;
   min-height: 32px;

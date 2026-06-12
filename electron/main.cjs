@@ -2,9 +2,11 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('node:path');
 const { createTaskStore } = require('./taskStore.cjs');
 const { registerTaskHandlers } = require('./taskIpc.cjs');
+const { createTaskDatabaseWatcher } = require('./taskDatabaseWatcher.cjs');
 
 let mainWindow;
 let store;
+let dbWatcher;
 
 function isDev() {
   return !app.isPackaged;
@@ -27,10 +29,29 @@ function createWindow() {
   });
 
   if (isDev()) {
-    mainWindow.loadURL('http://127.0.0.1:5173');
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+      console.error(`[renderer:load-failed] ${errorCode} ${errorDescription} ${validatedURL}`);
+    });
+    mainWindow.webContents.on('did-finish-load', () => {
+      console.log('[renderer:loaded] http://127.0.0.1:5173');
+    });
+    mainWindow.loadURL('http://127.0.0.1:5173').catch((error) => {
+      console.error('[renderer:loadURL-failed]', error);
+    });
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
+}
+
+function notifyTasksChanged() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  if (isDev()) {
+    console.log('[tasks:changed] reloading board data');
+  }
+  mainWindow.webContents.send('tasks:changed');
 }
 
 app.whenReady().then(() => {
@@ -38,6 +59,7 @@ app.whenReady().then(() => {
   store = createTaskStore(dbPath);
   registerTaskHandlers(ipcMain, store);
   createWindow();
+  dbWatcher = createTaskDatabaseWatcher(dbPath, notifyTasksChanged);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -53,6 +75,9 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  if (dbWatcher) {
+    dbWatcher.close();
+  }
   if (store) {
     store.close();
   }

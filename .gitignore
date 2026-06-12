@@ -2,6 +2,8 @@ node_modules/
 dist/
 release/
 release-artifacts/
+release-assets/
+release-win-x64/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
