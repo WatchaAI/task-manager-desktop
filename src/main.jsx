@@ -469,6 +469,7 @@ function App() {
 
   return (
     <main className="app-shell">
+      <div className="window-drag-strip" aria-hidden="true" />
       <header className="topbar">
         <div>
           <p className="eyebrow">Local SQLite Board</p>

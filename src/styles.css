@@ -48,12 +48,22 @@ button:disabled {
 }
 
 .app-shell {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
   min-height: 0;
   overflow: hidden;
   padding: 42px 34px 34px;
+}
+
+.window-drag-strip {
+  position: absolute;
+  top: 0;
+  right: 34px;
+  left: 120px;
+  height: 42px;
+  -webkit-app-region: drag;
 }
 
 .topbar {
