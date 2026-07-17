@@ -26,6 +26,7 @@ describe('task IPC handlers', () => {
       listTaskTypes: vi.fn(() => [{ id: 1, name: '工作', sortOrder: 0 }]),
       createTaskType: vi.fn((taskType) => ({ id: 2, sortOrder: 1, ...taskType })),
       updateTaskType: vi.fn((id, taskType) => ({ id, sortOrder: 0, ...taskType })),
+      reorderTaskTypes: vi.fn((items) => items),
       deleteTaskType: vi.fn((id) => ({ ok: true, id })),
       listPeople: vi.fn(() => [{ id: 1, name: '王洋' }]),
       listTasks: vi.fn(() => [{ id: 1, typeId: 1, title: '任务', status: 'todo', sortOrder: 0 }]),
@@ -48,6 +49,9 @@ describe('task IPC handlers', () => {
       sortOrder: 0,
       name: '项目'
     });
+    expect(await ipcMain.invoke('taskTypes:reorder', [{ id: 2, sortOrder: 0 }])).toEqual([
+      { id: 2, sortOrder: 0 }
+    ]);
     expect(await ipcMain.invoke('taskTypes:delete', 1)).toEqual({ ok: true, id: 1 });
     expect(await ipcMain.invoke('people:list')).toEqual([{ id: 1, name: '王洋' }]);
     const mapUrl = 'https://maps.apple.com/?q=%E6%9D%AD%E5%B7%9E%E8%A5%BF%E7%AB%99';

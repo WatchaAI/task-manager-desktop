@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  closestCenter,
   closestCorners,
   DndContext,
   KeyboardSensor,
@@ -10,6 +11,8 @@ import {
   useSensors
 } from '@dnd-kit/core';
 import {
+  arrayMove,
+  horizontalListSortingStrategy,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
@@ -444,6 +447,37 @@ function App() {
     }
   }
 
+  async function handleTypeDragEnd(event) {
+    const { active, over } = event;
+    const activeTaskTypeId = active.data.current?.taskTypeId;
+    const overTaskTypeId = over?.data.current?.taskTypeId;
+    if (!over || activeTaskTypeId === overTaskTypeId) {
+      return;
+    }
+
+    const activeIndex = taskTypes.findIndex((type) => type.id === activeTaskTypeId);
+    const overIndex = taskTypes.findIndex((type) => type.id === overTaskTypeId);
+    if (activeIndex < 0 || overIndex < 0) {
+      return;
+    }
+
+    const reorderedTypes = arrayMove(taskTypes, activeIndex, overIndex).map((type, sortOrder) => ({
+      ...type,
+      sortOrder
+    }));
+    setTaskTypes(reorderedTypes);
+
+    try {
+      setError('');
+      await getTaskApi().reorderTaskTypes(
+        reorderedTypes.map((type) => ({ id: type.id, sortOrder: type.sortOrder }))
+      );
+    } catch (err) {
+      setError(err.message || '保存类型排序失败');
+      loadBoardData({ preferredTypeId: activeTypeIdRef.current, showLoading: false });
+    }
+  }
+
   async function handleDragEnd(event) {
     const { active, over } = event;
     if (!over || active.id === over.id) {
@@ -545,34 +579,26 @@ function App() {
       </header>
 
       <section className="type-toolbar" aria-label="任务类型">
-        <div className="type-tabs" role="tablist" aria-label="切换任务类型">
-          {taskTypes.map((type) => (
-            <div key={type.id} className={`type-tab ${type.id === activeTypeId ? 'active' : ''}`}>
-              <button
-                className="type-tab-main"
-                type="button"
-                role="tab"
-                aria-selected={type.id === activeTypeId}
-                onClick={() => handleSelectType(type.id)}
-              >
-                <Layers2 size={15} />
-                {type.name}
-              </button>
-              <button className="type-action-button" type="button" onClick={() => startEditType(type)} aria-label="修改类型名称">
-                <Pencil size={13} />
-              </button>
-              <button
-                className="type-action-button danger"
-                type="button"
-                onClick={() => handleDeleteType(type)}
-                aria-label="删除类型"
-                disabled={taskTypes.length <= 1}
-              >
-                <Trash2 size={13} />
-              </button>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTypeDragEnd}>
+          <SortableContext
+            items={taskTypes.map((type) => `taskType:${type.id}`)}
+            strategy={horizontalListSortingStrategy}
+          >
+            <div className="type-tabs" role="tablist" aria-label="切换任务类型">
+              {taskTypes.map((type) => (
+                <SortableTaskTypeTab
+                  key={type.id}
+                  type={type}
+                  isActive={type.id === activeTypeId}
+                  canDelete={taskTypes.length > 1}
+                  onSelect={handleSelectType}
+                  onEdit={startEditType}
+                  onDelete={handleDeleteType}
+                />
+              ))}
             </div>
-          ))}
-        </div>
+          </SortableContext>
+        </DndContext>
         <form className="type-form" onSubmit={handleTypeFormSubmit}>
           <input
             value={newTypeName}
@@ -661,6 +687,58 @@ function App() {
         />
       )}
     </main>
+  );
+}
+
+function SortableTaskTypeTab({ type, isActive, canDelete, onSelect, onEdit, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `taskType:${type.id}`,
+    data: { type: 'taskType', taskTypeId: type.id }
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`type-tab ${isActive ? 'active' : ''} ${isDragging ? 'dragging' : ''}`}
+    >
+      <button
+        className="type-drag-handle"
+        type="button"
+        aria-label={`拖拽排序：${type.name}`}
+        title="拖拽排序"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical size={13} />
+      </button>
+      <button
+        className="type-tab-main"
+        type="button"
+        role="tab"
+        aria-selected={isActive}
+        onClick={() => onSelect(type.id)}
+      >
+        <Layers2 size={15} />
+        {type.name}
+      </button>
+      <button className="type-action-button" type="button" onClick={() => onEdit(type)} aria-label="修改类型名称">
+        <Pencil size={13} />
+      </button>
+      <button
+        className="type-action-button danger"
+        type="button"
+        onClick={() => onDelete(type)}
+        aria-label="删除类型"
+        disabled={!canDelete}
+      >
+        <Trash2 size={13} />
+      </button>
+    </div>
   );
 }
 

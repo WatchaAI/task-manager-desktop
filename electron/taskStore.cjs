@@ -290,6 +290,30 @@ function createTaskStore(dbPath) {
     return getTaskType(id);
   }
 
+  const reorderTaskTypesTransaction = db.transaction((items) => {
+    const statement = db.prepare(
+      `
+      UPDATE task_types
+      SET sort_order = ?,
+          updated_at = ?
+      WHERE id = ?
+    `
+    );
+    const now = new Date().toISOString();
+
+    for (const item of items) {
+      if (!getTaskType(item.id)) {
+        throw new Error(`Task type not found: ${item.id}`);
+      }
+      statement.run(item.sortOrder, now, item.id);
+    }
+  });
+
+  function reorderTaskTypes(items) {
+    reorderTaskTypesTransaction(items);
+    return listTaskTypes();
+  }
+
   function deleteTaskType(id) {
     const existing = getTaskType(id);
     if (!existing) {
@@ -474,6 +498,7 @@ function createTaskStore(dbPath) {
     listTaskTypes,
     createTaskType,
     updateTaskType,
+    reorderTaskTypes,
     deleteTaskType,
     listPeople,
     listTasks,

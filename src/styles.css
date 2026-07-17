@@ -303,7 +303,14 @@ h1 {
   color: #1d4ed8;
 }
 
+.type-tab.dragging {
+  z-index: 2;
+  opacity: 0.72;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
+}
+
 .type-tab-main,
+.type-drag-handle,
 .type-action-button {
   display: inline-flex;
   align-items: center;
@@ -311,6 +318,24 @@ h1 {
   border: 0;
   background: transparent;
   color: inherit;
+}
+
+.type-drag-handle {
+  width: 24px;
+  height: 28px;
+  border-radius: 7px;
+  color: #8a98aa;
+  cursor: grab;
+  touch-action: none;
+}
+
+.type-drag-handle:hover {
+  background: #e6eefb;
+  color: #263246;
+}
+
+.type-drag-handle:active {
+  cursor: grabbing;
 }
 
 .type-tab-main {

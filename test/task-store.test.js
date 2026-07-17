@@ -105,6 +105,22 @@ describe('task store', () => {
     expect(store.listTaskTypes()[0].name).toBe('项目');
   });
 
+  it('persists task type reordering', () => {
+    const [work, learning, daily] = store.listTaskTypes();
+
+    store.reorderTaskTypes([
+      { id: daily.id, sortOrder: 0 },
+      { id: work.id, sortOrder: 1 },
+      { id: learning.id, sortOrder: 2 }
+    ]);
+
+    expect(store.listTaskTypes()).toMatchObject([
+      { id: daily.id, name: '日常', sortOrder: 0 },
+      { id: work.id, name: '工作', sortOrder: 1 },
+      { id: learning.id, name: '学习', sortOrder: 2 }
+    ]);
+  });
+
   it('deletes a task type and its tasks', () => {
     const customType = store.createTaskType({ name: '临时' });
     const task = store.createTask({

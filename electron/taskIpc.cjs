@@ -7,6 +7,7 @@ function registerTaskHandlers(ipcMain, store, { openExternal } = {}) {
     const { id, ...taskType } = payload;
     return store.updateTaskType(id, taskType);
   });
+  ipcMain.handle('taskTypes:reorder', (_event, items) => store.reorderTaskTypes(items));
   ipcMain.handle('taskTypes:delete', (_event, id) => store.deleteTaskType(id));
   ipcMain.handle('people:list', () => store.listPeople());
   ipcMain.handle('maps:open', async (_event, location) => {
