@@ -23,6 +23,7 @@ import {
   Circle,
   Clock3,
   GripVertical,
+  LayoutDashboard,
   Layers2,
   LoaderCircle,
   Pencil,
@@ -31,6 +32,7 @@ import {
   Trash2,
   X
 } from 'lucide-react';
+import { CalendarView } from './CalendarView.jsx';
 import { createEmptyTaskForm } from './taskForm.js';
 import './styles.css';
 
@@ -152,6 +154,9 @@ function App() {
   const [error, setError] = useState('');
   const [modalTask, setModalTask] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [detailTask, setDetailTask] = useState(null);
+  const [viewMode, setViewMode] = useState('board');
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [taskPendingDelete, setTaskPendingDelete] = useState(null);
   const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
@@ -252,6 +257,11 @@ function App() {
     setIsModalOpen(true);
   }
 
+  function editTaskFromDetails(task) {
+    setDetailTask(null);
+    openEditTask(task);
+  }
+
   async function handleSaveTask(taskInput) {
     try {
       setError('');
@@ -265,6 +275,7 @@ function App() {
       }
       setIsModalOpen(false);
       setModalTask(null);
+      setDetailTask(null);
     } catch (err) {
       setError(err.message || '保存任务失败');
     }
@@ -481,6 +492,26 @@ function App() {
             <span>{activeTasks} 个未完成</span>
             <span>{doneTasks} 个完成</span>
           </div>
+          <div className="view-switcher" role="group" aria-label="切换视图">
+            <button
+              className={viewMode === 'board' ? 'active' : ''}
+              type="button"
+              onClick={() => setViewMode('board')}
+              aria-pressed={viewMode === 'board'}
+            >
+              <LayoutDashboard size={16} />
+              看板
+            </button>
+            <button
+              className={viewMode === 'calendar' ? 'active' : ''}
+              type="button"
+              onClick={() => setViewMode('calendar')}
+              aria-pressed={viewMode === 'calendar'}
+            >
+              <CalendarDays size={16} />
+              日历
+            </button>
+          </div>
           <button
             className="secondary-button refresh-button"
             type="button"
@@ -564,20 +595,37 @@ function App() {
           正在加载任务
         </div>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-          <section className="board" aria-label="任务看板">
-            {STATUSES.map((status) => (
-              <TaskColumn
-                key={status.id}
-                status={status}
-                tasks={grouped[status.id]}
-                onEdit={openEditTask}
-                onDelete={handleRequestDeleteTask}
-                onToggleSubTask={handleToggleSubTask}
-              />
-            ))}
-          </section>
-        </DndContext>
+        viewMode === 'calendar' ? (
+          <CalendarView
+            tasks={tasks}
+            currentMonth={calendarMonth}
+            onMonthChange={setCalendarMonth}
+            onOpenTask={setDetailTask}
+          />
+        ) : (
+          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+            <section className="board" aria-label="任务看板">
+              {STATUSES.map((status) => (
+                <TaskColumn
+                  key={status.id}
+                  status={status}
+                  tasks={grouped[status.id]}
+                  onEdit={openEditTask}
+                  onDelete={handleRequestDeleteTask}
+                  onToggleSubTask={handleToggleSubTask}
+                />
+              ))}
+            </section>
+          </DndContext>
+        )
+      )}
+
+      {detailTask && (
+        <TaskDetailsModal
+          task={detailTask}
+          onClose={() => setDetailTask(null)}
+          onEdit={editTaskFromDetails}
+        />
       )}
 
       {isModalOpen && (
@@ -958,6 +1006,70 @@ function TaskModal({ task, onClose, onSave }) {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function TaskDetailsModal({ task, onClose, onEdit }) {
+  const status = STATUSES.find((item) => item.id === task.status) || STATUSES[0];
+  const StatusIcon = status.icon;
+  const subTasks = normalizeSubTasksForForm(task.subTasks);
+  const progress = getSubTaskProgress(subTasks);
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="task-details-modal" role="dialog" aria-modal="true" aria-labelledby="task-details-title">
+        <div className="modal-header">
+          <div>
+            <p className="details-kicker">任务详情</p>
+            <h2 id="task-details-title">{task.title}</h2>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="关闭">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="details-meta">
+          <span className={`details-status details-status-${status.id}`}>
+            <StatusIcon size={15} />
+            {status.label}
+          </span>
+          <span>
+            <CalendarDays size={15} />
+            {formatTimeRange(task)}
+          </span>
+          {progress.total > 0 && <span>小任务 {progress.completed}/{progress.total}</span>}
+        </div>
+
+        <div className="details-section">
+          <h3>详细内容</h3>
+          <p className={task.description ? '' : 'muted'}>{task.description || '没有详细内容'}</p>
+        </div>
+
+        {subTasks.length > 0 && (
+          <div className="details-section">
+            <h3>小任务</h3>
+            <div className="details-subtasks">
+              {subTasks.map((subTask) => (
+                <div className={subTask.completed ? 'completed' : ''} key={subTask.id}>
+                  {subTask.completed ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                  <span>{subTask.title}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="modal-actions">
+          <button className="secondary-button" type="button" onClick={onClose}>
+            关闭
+          </button>
+          <button className="primary-button" type="button" onClick={() => onEdit(task)}>
+            <Pencil size={16} />
+            编辑任务
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
