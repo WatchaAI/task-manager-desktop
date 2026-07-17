@@ -30,3 +30,18 @@ export function createEmptyTaskForm(now = new Date()) {
     subTasks: []
   };
 }
+
+export function updateTaskFormField(form, field, value) {
+  const nextForm = { ...form, [field]: value };
+  if (field !== 'startTime' || value.length < 10 || form.endTime?.length < 10) {
+    return nextForm;
+  }
+
+  const startDate = value.slice(0, 10);
+  const endDate = form.endTime.slice(0, 10);
+  if (startDate > endDate) {
+    nextForm.endTime = `${startDate}${form.endTime.slice(10)}`;
+  }
+
+  return nextForm;
+}

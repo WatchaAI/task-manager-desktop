@@ -36,7 +36,7 @@ import {
   X
 } from 'lucide-react';
 import { CalendarView } from './CalendarView.jsx';
-import { cleanAssociatedPeople, createEmptyTaskForm } from './taskForm.js';
+import { cleanAssociatedPeople, createEmptyTaskForm, updateTaskFormField } from './taskForm.js';
 import './styles.css';
 
 const STATUSES = [
@@ -861,7 +861,7 @@ function TaskModal({ task, knownPeople, onClose, onSave }) {
   const pendingSubTaskIdRef = useRef(null);
 
   function updateField(field, value) {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => updateTaskFormField(current, field, value));
   }
 
   function addSubTask() {
