@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   buildCalendarDays,
+  getTaskDateKeys,
   getTasksForCalendarDay,
   getUnscheduledTasks,
   toDateKey
@@ -14,8 +15,7 @@ function formatMonthTitle(date) {
 }
 
 function getCalendarTaskTime(task, dateKey) {
-  const startKey = task.startTime?.slice(0, 10);
-  const endKey = task.endTime?.slice(0, 10);
+  const { startKey, endKey } = getTaskDateKeys(task);
   if (startKey === dateKey && task.startTime.length >= 16) {
     return task.startTime.slice(11, 16);
   }

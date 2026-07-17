@@ -7,9 +7,14 @@ export function toDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
-export function getTaskDateRange(task) {
+export function getTaskDateKeys(task) {
   const startKey = task.startTime?.match(DATE_KEY_PATTERN)?.[0] || '';
   const endKey = task.endTime?.match(DATE_KEY_PATTERN)?.[0] || '';
+  return { startKey, endKey };
+}
+
+export function getTaskDateRange(task) {
+  const { startKey, endKey } = getTaskDateKeys(task);
 
   if (!startKey && !endKey) {
     return null;

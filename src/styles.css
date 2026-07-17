@@ -488,7 +488,7 @@ h1 {
   flex: 1 1 auto;
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-template-rows: 32px repeat(6, minmax(64px, 1fr));
+  grid-template-rows: 32px repeat(6, minmax(0, 1fr));
   min-height: 0;
   overflow: hidden;
 }
@@ -562,9 +562,9 @@ h1 {
 }
 
 .calendar-task {
-  --calendar-task-bg: #eef5ff;
-  --calendar-task-border: #d5e5ff;
-  --calendar-task-text: #1e4f9a;
+  --status-bg: #eef5ff;
+  --status-border: #d5e5ff;
+  --status-text: #1e4f9a;
   flex: 0 0 auto;
   min-width: 0;
   min-height: 23px;
@@ -573,10 +573,10 @@ h1 {
   gap: 5px;
   overflow: hidden;
   padding: 3px 6px;
-  border: 1px solid var(--calendar-task-border);
+  border: 1px solid var(--status-border);
   border-radius: 5px;
-  background: var(--calendar-task-bg);
-  color: var(--calendar-task-text);
+  background: var(--status-bg);
+  color: var(--status-text);
   font-size: 11px;
   line-height: 1.2;
   text-align: left;
@@ -589,16 +589,25 @@ h1 {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
 }
 
-.calendar-task-in_progress {
-  --calendar-task-bg: #fff7df;
-  --calendar-task-border: #f6dfaa;
-  --calendar-task-text: #925c09;
+.calendar-task-todo,
+.details-status-todo {
+  --status-bg: #eef5ff;
+  --status-border: #d5e5ff;
+  --status-text: #1e4f9a;
 }
 
-.calendar-task-done {
-  --calendar-task-bg: #ecf9f0;
-  --calendar-task-border: #cdebd6;
-  --calendar-task-text: #237441;
+.calendar-task-in_progress,
+.details-status-in_progress {
+  --status-bg: #fff7df;
+  --status-border: #f6dfaa;
+  --status-text: #925c09;
+}
+
+.calendar-task-done,
+.details-status-done {
+  --status-bg: #ecf9f0;
+  --status-border: #cdebd6;
+  --status-text: #237441;
 }
 
 .calendar-task-time {
@@ -988,22 +997,10 @@ h1 {
   font-weight: 680;
 }
 
-.details-meta .details-status-todo {
-  border-color: #d5e5ff;
-  background: #eef5ff;
-  color: #1e4f9a;
-}
-
-.details-meta .details-status-in_progress {
-  border-color: #f6dfaa;
-  background: #fff7df;
-  color: #925c09;
-}
-
-.details-meta .details-status-done {
-  border-color: #cdebd6;
-  background: #ecf9f0;
-  color: #237441;
+.details-meta .details-status {
+  border-color: var(--status-border);
+  background: var(--status-bg);
+  color: var(--status-text);
 }
 
 .details-section {
@@ -1238,6 +1235,22 @@ h1 {
 
 .modal-actions {
   justify-content: flex-end;
+}
+
+@media (max-height: 740px) {
+  .calendar-toolbar {
+    padding-block: 9px;
+  }
+
+  .calendar-day {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .calendar-day-number {
+    width: 21px;
+    height: 21px;
+  }
 }
 
 @keyframes spin {
