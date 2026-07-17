@@ -36,7 +36,6 @@ import {
   X
 } from 'lucide-react';
 import { CalendarView } from './CalendarView.jsx';
-import { createMapUrl } from './map.js';
 import { cleanAssociatedPeople, createEmptyTaskForm } from './taskForm.js';
 import './styles.css';
 
@@ -151,9 +150,8 @@ function getSubTaskProgress(subTasks = []) {
 }
 
 async function openTaskLocation(location) {
-  const url = createMapUrl(location);
-  if (url) {
-    await getTaskApi().openMap(url);
+  if (String(location || '').trim()) {
+    await getTaskApi().openMap(location);
   }
 }
 

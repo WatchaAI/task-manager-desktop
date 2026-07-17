@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createMapUrl } from '../src/map.js';
+import mapUrlModule from '../electron/mapUrl.cjs';
+
+const { createMapUrl } = mapUrlModule;
 
 describe('map links', () => {
   it('builds an Apple Maps search URL for a task location', () => {

@@ -1,3 +1,5 @@
+const { createMapUrl } = require('./mapUrl.cjs');
+
 function registerTaskHandlers(ipcMain, store, { openExternal } = {}) {
   ipcMain.handle('taskTypes:list', () => store.listTaskTypes());
   ipcMain.handle('taskTypes:create', (_event, taskType) => store.createTaskType(taskType));
@@ -7,9 +9,10 @@ function registerTaskHandlers(ipcMain, store, { openExternal } = {}) {
   });
   ipcMain.handle('taskTypes:delete', (_event, id) => store.deleteTaskType(id));
   ipcMain.handle('people:list', () => store.listPeople());
-  ipcMain.handle('maps:open', async (_event, url) => {
-    if (typeof url !== 'string' || !url.startsWith('https://maps.apple.com/?q=')) {
-      throw new Error('Invalid map URL');
+  ipcMain.handle('maps:open', async (_event, location) => {
+    const url = createMapUrl(location);
+    if (!url) {
+      throw new Error('Task location is required');
     }
     if (typeof openExternal !== 'function') {
       throw new Error('Map integration is unavailable');

@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('taskApi', {
   updateTaskType: (payload) => ipcRenderer.invoke('taskTypes:update', payload),
   deleteTaskType: (id) => ipcRenderer.invoke('taskTypes:delete', id),
   listPeople: () => ipcRenderer.invoke('people:list'),
-  openMap: (url) => ipcRenderer.invoke('maps:open', url),
+  openMap: (location) => ipcRenderer.invoke('maps:open', location),
   listTasks: (typeId) => ipcRenderer.invoke('tasks:list', typeId),
   createTask: (task) => ipcRenderer.invoke('tasks:create', task),
   updateTask: (payload) => ipcRenderer.invoke('tasks:update', payload),

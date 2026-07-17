@@ -20,10 +20,11 @@ describe('task form defaults', () => {
 
 describe('associated people input', () => {
   it('splits typed names and removes blanks and duplicates', () => {
-    expect(cleanAssociatedPeople(['王洋', ' 小明, 小红 ', '', '王洋', '小明'])).toEqual([
+    expect(cleanAssociatedPeople(['王洋', ' 小明, 小红 ', '', '王洋', '小明', 'Alice', 'alice'])).toEqual([
       '王洋',
       '小明',
-      '小红'
+      '小红',
+      'Alice'
     ]);
   });
 });

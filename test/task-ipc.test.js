@@ -51,7 +51,7 @@ describe('task IPC handlers', () => {
     expect(await ipcMain.invoke('taskTypes:delete', 1)).toEqual({ ok: true, id: 1 });
     expect(await ipcMain.invoke('people:list')).toEqual([{ id: 1, name: '王洋' }]);
     const mapUrl = 'https://maps.apple.com/?q=%E6%9D%AD%E5%B7%9E%E8%A5%BF%E7%AB%99';
-    expect(await ipcMain.invoke('maps:open', mapUrl)).toEqual({ ok: true });
+    expect(await ipcMain.invoke('maps:open', ' 杭州西站 ')).toEqual({ ok: true });
     expect(openExternal).toHaveBeenCalledWith(
       mapUrl
     );

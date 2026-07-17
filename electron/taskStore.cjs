@@ -1,4 +1,5 @@
 const Database = require('better-sqlite3');
+const { cleanAssociatedPeople } = require('./people.cjs');
 
 const STATUSES = new Set(['todo', 'in_progress', 'done']);
 const DEFAULT_TASK_TYPES = ['工作', '学习', '日常'];
@@ -91,7 +92,7 @@ function createTaskStore(dbPath) {
     return `subtask-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  function parseSubTasks(value) {
+  function parseJsonArray(value) {
     if (!value) {
       return [];
     }
@@ -126,14 +127,6 @@ function createTaskStore(dbPath) {
       .filter(Boolean);
   }
 
-  function normalizeAssociatedPeople(people = []) {
-    if (!Array.isArray(people)) {
-      return [];
-    }
-
-    return [...new Set(people.map((person) => String(person || '').trim()).filter(Boolean))];
-  }
-
   function rememberPeople(people, now) {
     const statement = db.prepare(`
       INSERT INTO people (name, created_at, last_used_at)
@@ -166,8 +159,8 @@ function createTaskStore(dbPath) {
       endTime: row.end_time,
       description: row.description,
       location: row.location,
-      associatedPeople: normalizeAssociatedPeople(parseSubTasks(row.associated_people)),
-      subTasks: parseSubTasks(row.sub_tasks),
+      associatedPeople: cleanAssociatedPeople(parseJsonArray(row.associated_people)),
+      subTasks: parseJsonArray(row.sub_tasks),
       status: row.status,
       sortOrder: row.sort_order,
       createdAt: row.created_at,
@@ -229,7 +222,7 @@ function createTaskStore(dbPath) {
       endTime: input.endTime || '',
       description: input.description || '',
       location: String(input.location || '').trim(),
-      associatedPeople: normalizeAssociatedPeople(input.associatedPeople),
+      associatedPeople: cleanAssociatedPeople(input.associatedPeople),
       subTasks: normalizeSubTasks(input.subTasks),
       status
     };
