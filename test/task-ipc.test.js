@@ -21,11 +21,13 @@ function createFakeIpcMain() {
 describe('task IPC handlers', () => {
   it('registers CRUD and reorder channels', async () => {
     const ipcMain = createFakeIpcMain();
+    const openExternal = vi.fn(() => Promise.resolve());
     const store = {
       listTaskTypes: vi.fn(() => [{ id: 1, name: '工作', sortOrder: 0 }]),
       createTaskType: vi.fn((taskType) => ({ id: 2, sortOrder: 1, ...taskType })),
       updateTaskType: vi.fn((id, taskType) => ({ id, sortOrder: 0, ...taskType })),
       deleteTaskType: vi.fn((id) => ({ ok: true, id })),
+      listPeople: vi.fn(() => [{ id: 1, name: '王洋' }]),
       listTasks: vi.fn(() => [{ id: 1, typeId: 1, title: '任务', status: 'todo', sortOrder: 0 }]),
       createTask: vi.fn((task) => ({ id: 2, ...task })),
       updateTask: vi.fn((id, task) => ({ id, ...task })),
@@ -33,7 +35,7 @@ describe('task IPC handlers', () => {
       reorderTasks: vi.fn((items) => items)
     };
 
-    registerTaskHandlers(ipcMain, store);
+    registerTaskHandlers(ipcMain, store, { openExternal });
 
     expect(await ipcMain.invoke('taskTypes:list')).toEqual([{ id: 1, name: '工作', sortOrder: 0 }]);
     expect(await ipcMain.invoke('taskTypes:create', { name: '副业' })).toEqual({
@@ -47,6 +49,12 @@ describe('task IPC handlers', () => {
       name: '项目'
     });
     expect(await ipcMain.invoke('taskTypes:delete', 1)).toEqual({ ok: true, id: 1 });
+    expect(await ipcMain.invoke('people:list')).toEqual([{ id: 1, name: '王洋' }]);
+    const mapUrl = 'https://maps.apple.com/?q=%E6%9D%AD%E5%B7%9E%E8%A5%BF%E7%AB%99';
+    expect(await ipcMain.invoke('maps:open', mapUrl)).toEqual({ ok: true });
+    expect(openExternal).toHaveBeenCalledWith(
+      mapUrl
+    );
     expect(await ipcMain.invoke('tasks:list', 1)).toEqual([
       { id: 1, typeId: 1, title: '任务', status: 'todo', sortOrder: 0 }
     ]);

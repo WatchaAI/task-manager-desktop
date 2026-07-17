@@ -10,6 +10,20 @@ function formatLocalDate(date) {
   ].join('-');
 }
 
+export function cleanAssociatedPeople(people = []) {
+  const uniqueNames = new Map();
+  for (const value of people) {
+    for (const part of String(value || '').split(/[,，]/)) {
+      const name = part.trim();
+      const key = name.toLocaleLowerCase();
+      if (name && !uniqueNames.has(key)) {
+        uniqueNames.set(key, name);
+      }
+    }
+  }
+  return [...uniqueNames.values()];
+}
+
 export function createEmptyTaskForm(now = new Date()) {
   const today = formatLocalDate(now);
 
@@ -18,6 +32,8 @@ export function createEmptyTaskForm(now = new Date()) {
     startTime: `${today}T00:00`,
     endTime: `${today}T23:59`,
     description: '',
+    location: '',
+    associatedPeople: [],
     status: 'todo',
     subTasks: []
   };

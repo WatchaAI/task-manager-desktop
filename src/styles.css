@@ -867,6 +867,51 @@ h1 {
   line-height: 1.35;
 }
 
+.task-context {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task-location-link,
+.task-people {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #526176;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.task-location-link {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  text-align: left;
+}
+
+.task-location-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.task-location-link svg,
+.task-people svg {
+  flex: 0 0 auto;
+}
+
+.task-location-link span,
+.task-people {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .task-description {
   min-height: 42px;
   color: #3d4a5f;
@@ -1001,6 +1046,25 @@ h1 {
   border-color: var(--status-border);
   background: var(--status-bg);
   color: var(--status-text);
+}
+
+.details-location {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid #cfe0ff;
+  border-radius: 7px;
+  background: #f2f7ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.details-location:hover {
+  border-color: #a9c5f5;
+  background: #e9f1ff;
 }
 
 .details-section {
@@ -1155,6 +1219,87 @@ h1 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+.location-input-row,
+.person-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.location-map-button,
+.person-input-row .secondary-button {
+  min-height: 42px;
+}
+
+.people-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.people-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #364359;
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.field-hint {
+  color: #8a96a8;
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.person-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.person-tag {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid #dce3ed;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #526176;
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.person-tag:hover {
+  border-color: #afc4e5;
+  background: #edf4ff;
+  color: #1d4ed8;
+}
+
+.person-tag.selected {
+  border-color: #bfd2f4;
+  background: #edf4ff;
+  color: #1d4ed8;
+}
+
+.people-suggestions {
+  display: grid;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid #e5eaf2;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.people-suggestions > span {
+  color: #758196;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .task-modal input,

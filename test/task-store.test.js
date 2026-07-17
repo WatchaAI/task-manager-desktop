@@ -65,7 +65,12 @@ describe('task store', () => {
     const [defaultType] = store.listTaskTypes();
     expect(defaultType.name).toBe('工作');
     expect(store.listTasks(defaultType.id)).toMatchObject([
-      { title: '旧任务', typeId: defaultType.id }
+      {
+        title: '旧任务',
+        typeId: defaultType.id,
+        location: '',
+        associatedPeople: []
+      }
     ]);
   });
 
@@ -183,6 +188,8 @@ describe('task store', () => {
       startTime: '2026-05-26T09:00',
       endTime: '2026-05-26T11:00',
       description: '实现一个可以拖拽的桌面任务看板。',
+      location: '杭州未来科技城',
+      associatedPeople: ['王洋', '小明', ' 王洋 ', ''],
       status: 'todo',
       subTasks: [
         { id: 'draft', title: '拆页面结构', completed: true },
@@ -195,6 +202,8 @@ describe('task store', () => {
       startTime: '2026-05-26T09:00',
       endTime: '2026-05-26T11:00',
       description: '实现一个可以拖拽的桌面任务看板。',
+      location: '杭州未来科技城',
+      associatedPeople: ['王洋', '小明'],
       status: 'todo',
       sortOrder: 0,
       subTasks: [
@@ -208,6 +217,8 @@ describe('task store', () => {
       startTime: '2026-05-26T10:00',
       endTime: '2026-05-26T12:00',
       description: '补齐 SQLite 持久化。',
+      location: '杭州西站',
+      associatedPeople: ['小明', '小红'],
       status: 'in_progress',
       subTasks: [
         { id: 'draft', title: '拆页面结构', completed: true },
@@ -222,6 +233,8 @@ describe('task store', () => {
       startTime: '2026-05-26T10:00',
       endTime: '2026-05-26T12:00',
       description: '补齐 SQLite 持久化。',
+      location: '杭州西站',
+      associatedPeople: ['小明', '小红'],
       status: 'in_progress',
       subTasks: [
         { id: 'draft', title: '拆页面结构', completed: true },
@@ -260,6 +273,21 @@ describe('task store', () => {
       title: '通知用户',
       completed: true
     });
+  });
+
+  it('remembers associated people for quick selection after the original task is deleted', () => {
+    const created = store.createTask({
+      title: '项目评审',
+      associatedPeople: ['王洋', '小明'],
+      status: 'todo'
+    });
+
+    store.updateTask(created.id, { associatedPeople: ['小明', '小红'] });
+    store.deleteTask(created.id);
+
+    expect(store.listPeople().map((person) => person.name)).toEqual(
+      expect.arrayContaining(['王洋', '小明', '小红'])
+    );
   });
 
   it('lists tasks grouped by status and ordered by sortOrder', () => {

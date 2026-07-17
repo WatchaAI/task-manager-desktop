@@ -26,14 +26,18 @@ import {
   LayoutDashboard,
   Layers2,
   LoaderCircle,
+  MapPin,
+  Navigation,
   Pencil,
   Plus,
   RefreshCw,
   Trash2,
+  UserRound,
   X
 } from 'lucide-react';
 import { CalendarView } from './CalendarView.jsx';
-import { createEmptyTaskForm } from './taskForm.js';
+import { createMapUrl } from './map.js';
+import { cleanAssociatedPeople, createEmptyTaskForm } from './taskForm.js';
 import './styles.css';
 
 const STATUSES = [
@@ -146,10 +150,18 @@ function getSubTaskProgress(subTasks = []) {
   return { total, completed, percent };
 }
 
+async function openTaskLocation(location) {
+  const url = createMapUrl(location);
+  if (url) {
+    await getTaskApi().openMap(url);
+  }
+}
+
 function App() {
   const [taskTypes, setTaskTypes] = useState([]);
   const [activeTypeId, setActiveTypeId] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [knownPeople, setKnownPeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modalTask, setModalTask] = useState(null);
@@ -185,12 +197,16 @@ function App() {
         setLoading(true);
       }
       setError('');
-      const loadedTypes = await getTaskApi().listTaskTypes();
+      const [loadedTypes, loadedPeople] = await Promise.all([
+        getTaskApi().listTaskTypes(),
+        getTaskApi().listPeople()
+      ]);
       const nextTypeId = loadedTypes.some((type) => type.id === preferredTypeId)
         ? preferredTypeId
         : loadedTypes[0]?.id || null;
       const loadedTasks = nextTypeId ? await getTaskApi().listTasks(nextTypeId) : [];
       setTaskTypes(loadedTypes);
+      setKnownPeople(loadedPeople.map((person) => person.name));
       setActiveTypeId(nextTypeId);
       activeTypeIdRef.current = nextTypeId;
       setTasks(loadedTasks);
@@ -273,6 +289,7 @@ function App() {
         const created = await getTaskApi().createTask({ ...taskInput, typeId });
         setTasks((current) => normalizeSortOrders([...current, created]));
       }
+      setKnownPeople((current) => cleanAssociatedPeople([...(taskInput.associatedPeople || []), ...current]));
       setIsModalOpen(false);
       setModalTask(null);
       setDetailTask(null);
@@ -631,6 +648,7 @@ function App() {
       {isModalOpen && (
         <TaskModal
           task={modalTask}
+          knownPeople={knownPeople}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveTask}
         />
@@ -777,6 +795,27 @@ function TaskCard({ task, onEdit, onDelete, onToggleSubTask }) {
         <CalendarDays size={15} />
         {formatTimeRange(task)}
       </p>
+      {(task.location || task.associatedPeople?.length > 0) && (
+        <div className="task-context">
+          {task.location && (
+            <button
+              className="task-location-link"
+              type="button"
+              onClick={() => openTaskLocation(task.location)}
+              title="在地图中查看"
+            >
+              <MapPin size={14} />
+              <span>{task.location}</span>
+            </button>
+          )}
+          {task.associatedPeople?.length > 0 && (
+            <span className="task-people" title={task.associatedPeople.join('、')}>
+              <UserRound size={14} />
+              {task.associatedPeople.join('、')}
+            </span>
+          )}
+        </div>
+      )}
       {task.description ? (
         <p className="task-description">{task.description}</p>
       ) : (
@@ -810,12 +849,15 @@ function TaskCard({ task, onEdit, onDelete, onToggleSubTask }) {
   );
 }
 
-function TaskModal({ task, onClose, onSave }) {
+function TaskModal({ task, knownPeople, onClose, onSave }) {
   const [form, setForm] = useState(() => ({
     ...(task || createEmptyTaskForm()),
+    location: task?.location || '',
+    associatedPeople: cleanAssociatedPeople(task?.associatedPeople),
     subTasks: normalizeSubTasksForForm(task?.subTasks)
   }));
   const [formError, setFormError] = useState('');
+  const [personInput, setPersonInput] = useState('');
   const subTaskListRef = useRef(null);
   const subTaskInputRefs = useRef(new Map());
   const pendingSubTaskIdRef = useRef(null);
@@ -852,6 +894,29 @@ function TaskModal({ task, onClose, onSave }) {
     }));
   }
 
+  function addPerson(value = personInput) {
+    const nextPeople = cleanAssociatedPeople([...(form.associatedPeople || []), value]);
+    if (nextPeople.length === form.associatedPeople.length) {
+      return;
+    }
+    updateField('associatedPeople', nextPeople);
+    setPersonInput('');
+  }
+
+  function removePerson(name) {
+    updateField(
+      'associatedPeople',
+      form.associatedPeople.filter((person) => person !== name)
+    );
+  }
+
+  function handlePersonInputKeyDown(event) {
+    if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      addPerson();
+    }
+  }
+
   function submit(event) {
     event.preventDefault();
     if (!form.title.trim()) {
@@ -864,12 +929,17 @@ function TaskModal({ task, onClose, onSave }) {
       startTime: form.startTime || '',
       endTime: form.endTime || '',
       description: form.description || '',
+      location: form.location?.trim() || '',
+      associatedPeople: cleanAssociatedPeople([...(form.associatedPeople || []), personInput]),
       status: form.status || 'todo',
       subTasks: cleanSubTasksForSave(form.subTasks)
     });
   }
 
   const formSubTasks = normalizeSubTasksForForm(form.subTasks);
+  const availablePeople = knownPeople.filter(
+    (name) => !form.associatedPeople.some((person) => person.toLocaleLowerCase() === name.toLocaleLowerCase())
+  );
 
   useEffect(() => {
     const pendingId = pendingSubTaskIdRef.current;
@@ -938,6 +1008,70 @@ function TaskModal({ task, onClose, onSave }) {
             ))}
           </select>
         </label>
+
+        <label>
+          <span>地点</span>
+          <div className="location-input-row">
+            <input
+              value={form.location}
+              onChange={(event) => updateField('location', event.target.value)}
+              placeholder="输入地址或地点名称"
+            />
+            <button
+              className="secondary-button location-map-button"
+              type="button"
+              onClick={() => openTaskLocation(form.location)}
+              disabled={!form.location.trim()}
+            >
+              <Navigation size={15} />
+              地图
+            </button>
+          </div>
+        </label>
+
+        <div className="people-editor">
+          <div className="people-editor-header">
+            <span>关联人员</span>
+            <span className="field-hint">输入后按回车添加</span>
+          </div>
+          {form.associatedPeople.length > 0 && (
+            <div className="person-tags" aria-label="已关联人员">
+              {form.associatedPeople.map((person) => (
+                <button className="person-tag selected" type="button" key={person} onClick={() => removePerson(person)}>
+                  <UserRound size={14} />
+                  {person}
+                  <X size={13} />
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="person-input-row">
+            <input
+              value={personInput}
+              onChange={(event) => setPersonInput(event.target.value)}
+              onKeyDown={handlePersonInputKeyDown}
+              placeholder="输入姓名"
+              aria-label="关联人员姓名"
+            />
+            <button className="secondary-button" type="button" onClick={() => addPerson()} disabled={!personInput.trim()}>
+              <Plus size={15} />
+              添加
+            </button>
+          </div>
+          {availablePeople.length > 0 && (
+            <div className="people-suggestions">
+              <span>快捷选择</span>
+              <div className="person-tags">
+                {availablePeople.map((person) => (
+                  <button className="person-tag" type="button" key={person} onClick={() => addPerson(person)}>
+                    <Plus size={13} />
+                    {person}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         <label>
           <span>详细内容</span>
@@ -1038,6 +1172,19 @@ function TaskDetailsModal({ task, onClose, onEdit }) {
             <CalendarDays size={15} />
             {formatTimeRange(task)}
           </span>
+          {task.location && (
+            <button className="details-location" type="button" onClick={() => openTaskLocation(task.location)}>
+              <MapPin size={15} />
+              {task.location}
+              <Navigation size={13} />
+            </button>
+          )}
+          {task.associatedPeople?.length > 0 && (
+            <span>
+              <UserRound size={15} />
+              {task.associatedPeople.join('、')}
+            </span>
+          )}
           {progress.total > 0 && <span>小任务 {progress.completed}/{progress.total}</span>}
         </div>
 

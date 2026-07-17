@@ -17,6 +17,13 @@ function createTaskStore(dbPath) {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS people (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+      created_at TEXT NOT NULL,
+      last_used_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       type_id INTEGER NOT NULL DEFAULT 1,
@@ -24,6 +31,8 @@ function createTaskStore(dbPath) {
       start_time TEXT NOT NULL DEFAULT '',
       end_time TEXT NOT NULL DEFAULT '',
       description TEXT NOT NULL DEFAULT '',
+      location TEXT NOT NULL DEFAULT '',
+      associated_people TEXT NOT NULL DEFAULT '[]',
       sub_tasks TEXT NOT NULL DEFAULT '[]',
       status TEXT NOT NULL CHECK(status IN ('todo', 'in_progress', 'done')),
       sort_order INTEGER NOT NULL DEFAULT 0,
@@ -41,6 +50,12 @@ function createTaskStore(dbPath) {
   }
   if (!columns.some((column) => column.name === 'type_id')) {
     db.prepare("ALTER TABLE tasks ADD COLUMN type_id INTEGER NOT NULL DEFAULT 1").run();
+  }
+  if (!columns.some((column) => column.name === 'location')) {
+    db.prepare("ALTER TABLE tasks ADD COLUMN location TEXT NOT NULL DEFAULT ''").run();
+  }
+  if (!columns.some((column) => column.name === 'associated_people')) {
+    db.prepare("ALTER TABLE tasks ADD COLUMN associated_people TEXT NOT NULL DEFAULT '[]'").run();
   }
 
   db.exec(`
@@ -111,6 +126,37 @@ function createTaskStore(dbPath) {
       .filter(Boolean);
   }
 
+  function normalizeAssociatedPeople(people = []) {
+    if (!Array.isArray(people)) {
+      return [];
+    }
+
+    return [...new Set(people.map((person) => String(person || '').trim()).filter(Boolean))];
+  }
+
+  function rememberPeople(people, now) {
+    const statement = db.prepare(`
+      INSERT INTO people (name, created_at, last_used_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(name) DO UPDATE SET last_used_at = excluded.last_used_at
+    `);
+    for (const name of people) {
+      statement.run(name, now, now);
+    }
+  }
+
+  function listPeople() {
+    return db
+      .prepare('SELECT id, name, created_at, last_used_at FROM people ORDER BY last_used_at DESC, name COLLATE NOCASE ASC')
+      .all()
+      .map((row) => ({
+        id: row.id,
+        name: row.name,
+        createdAt: row.created_at,
+        lastUsedAt: row.last_used_at
+      }));
+  }
+
   function rowToTask(row) {
     return {
       id: row.id,
@@ -119,6 +165,8 @@ function createTaskStore(dbPath) {
       startTime: row.start_time,
       endTime: row.end_time,
       description: row.description,
+      location: row.location,
+      associatedPeople: normalizeAssociatedPeople(parseSubTasks(row.associated_people)),
       subTasks: parseSubTasks(row.sub_tasks),
       status: row.status,
       sortOrder: row.sort_order,
@@ -180,6 +228,8 @@ function createTaskStore(dbPath) {
       startTime: input.startTime || '',
       endTime: input.endTime || '',
       description: input.description || '',
+      location: String(input.location || '').trim(),
+      associatedPeople: normalizeAssociatedPeople(input.associatedPeople),
       subTasks: normalizeSubTasks(input.subTasks),
       status
     };
@@ -314,13 +364,15 @@ function createTaskStore(dbPath) {
           start_time,
           end_time,
           description,
+          location,
+          associated_people,
           sub_tasks,
           status,
           sort_order,
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
       )
       .run(
@@ -329,12 +381,16 @@ function createTaskStore(dbPath) {
         task.startTime,
         task.endTime,
         task.description,
+        task.location,
+        JSON.stringify(task.associatedPeople),
         JSON.stringify(task.subTasks),
         task.status,
         nextSortOrder(task.typeId, task.status),
         now,
         now
       );
+
+    rememberPeople(task.associatedPeople, now);
 
     return getTask(result.lastInsertRowid);
   }
@@ -355,6 +411,8 @@ function createTaskStore(dbPath) {
           start_time = ?,
           end_time = ?,
           description = ?,
+          location = ?,
+          associated_people = ?,
           sub_tasks = ?,
           status = ?,
           updated_at = ?
@@ -366,11 +424,15 @@ function createTaskStore(dbPath) {
       task.startTime,
       task.endTime,
       task.description,
+      task.location,
+      JSON.stringify(task.associatedPeople),
       JSON.stringify(task.subTasks),
       task.status,
       now,
       id
     );
+
+    rememberPeople(task.associatedPeople, now);
 
     return getTask(id);
   }
@@ -420,6 +482,7 @@ function createTaskStore(dbPath) {
     createTaskType,
     updateTaskType,
     deleteTaskType,
+    listPeople,
     listTasks,
     createTask,
     updateTask,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyTaskForm } from '../src/taskForm.js';
+import { cleanAssociatedPeople, createEmptyTaskForm } from '../src/taskForm.js';
 
 describe('task form defaults', () => {
   it('defaults a new task to the start and end of the local day', () => {
@@ -10,8 +10,20 @@ describe('task form defaults', () => {
       startTime: '2026-05-27T00:00',
       endTime: '2026-05-27T23:59',
       description: '',
+      location: '',
+      associatedPeople: [],
       status: 'todo',
       subTasks: []
     });
+  });
+});
+
+describe('associated people input', () => {
+  it('splits typed names and removes blanks and duplicates', () => {
+    expect(cleanAssociatedPeople(['王洋', ' 小明, 小红 ', '', '王洋', '小明'])).toEqual([
+      '王洋',
+      '小明',
+      '小红'
+    ]);
   });
 });

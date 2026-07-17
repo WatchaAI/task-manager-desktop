@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const { createTaskStore } = require('./taskStore.cjs');
 const { registerTaskHandlers } = require('./taskIpc.cjs');
@@ -57,7 +57,7 @@ function notifyTasksChanged() {
 app.whenReady().then(() => {
   const dbPath = path.join(app.getPath('userData'), 'tasks.sqlite');
   store = createTaskStore(dbPath);
-  registerTaskHandlers(ipcMain, store);
+  registerTaskHandlers(ipcMain, store, { openExternal: (url) => shell.openExternal(url) });
   createWindow();
   dbWatcher = createTaskDatabaseWatcher(dbPath, notifyTasksChanged);
 
