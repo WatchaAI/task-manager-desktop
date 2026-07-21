@@ -44,7 +44,12 @@
       "output": "release"
     },
     "mac": {
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "用于将新建事项同步到 macOS 系统日历。"
+      }
     }
   }
 }

@@ -3,6 +3,7 @@ const path = require('node:path');
 const { createTaskStore } = require('./taskStore.cjs');
 const { registerTaskHandlers } = require('./taskIpc.cjs');
 const { createTaskDatabaseWatcher } = require('./taskDatabaseWatcher.cjs');
+const { createMacCalendarSync } = require('./macCalendar.cjs');
 
 let mainWindow;
 let store;
@@ -57,7 +58,10 @@ function notifyTasksChanged() {
 app.whenReady().then(() => {
   const dbPath = path.join(app.getPath('userData'), 'tasks.sqlite');
   store = createTaskStore(dbPath);
-  registerTaskHandlers(ipcMain, store, { openExternal: (url) => shell.openExternal(url) });
+  registerTaskHandlers(ipcMain, store, {
+    openExternal: (url) => shell.openExternal(url),
+    syncTaskToCalendar: createMacCalendarSync()
+  });
   createWindow();
   dbWatcher = createTaskDatabaseWatcher(dbPath, notifyTasksChanged);
 

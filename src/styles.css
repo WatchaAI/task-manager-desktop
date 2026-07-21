@@ -411,6 +411,12 @@ h1 {
   font-size: 14px;
 }
 
+.alert.warning {
+  border-color: #f1d49a;
+  background: #fff9e8;
+  color: #855b12;
+}
+
 .loading-panel {
   flex: 1 1 auto;
   display: flex;

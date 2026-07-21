@@ -78,4 +78,55 @@ describe('task IPC handlers', () => {
       { id: 2, status: 'done', sortOrder: 0 }
     ]);
   });
+
+  it('syncs a newly stored task to Calendar and returns the sync result', async () => {
+    const ipcMain = createFakeIpcMain();
+    const createdTask = {
+      id: 9,
+      title: '客户会议',
+      startTime: '2026-07-22T10:00',
+      endTime: '2026-07-22T11:00'
+    };
+    const store = {
+      createTask: vi.fn(() => createdTask)
+    };
+    const syncTaskToCalendar = vi.fn(() =>
+      Promise.resolve({ status: 'synced', calendarName: '工作', eventId: 'calendar-9' })
+    );
+    registerTaskHandlers(ipcMain, store, { syncTaskToCalendar });
+
+    const result = await ipcMain.invoke('tasks:create', { title: '客户会议' });
+
+    expect(store.createTask).toHaveBeenCalledWith({ title: '客户会议' });
+    expect(syncTaskToCalendar).toHaveBeenCalledWith(createdTask);
+    expect(result).toEqual({
+      ...createdTask,
+      calendarSync: { status: 'synced', calendarName: '工作', eventId: 'calendar-9' }
+    });
+  });
+
+  it('keeps the new task saved when Calendar access fails', async () => {
+    const ipcMain = createFakeIpcMain();
+    const createdTask = {
+      id: 10,
+      title: '时间块',
+      startTime: '2026-07-22T14:00',
+      endTime: '2026-07-22T15:00'
+    };
+    const store = {
+      createTask: vi.fn(() => createdTask)
+    };
+    const syncTaskToCalendar = vi.fn(() => Promise.reject(new Error('Not authorized (-1743)')));
+    registerTaskHandlers(ipcMain, store, { syncTaskToCalendar });
+
+    await expect(ipcMain.invoke('tasks:create', { title: '时间块' })).resolves.toEqual({
+      ...createdTask,
+      calendarSync: {
+        status: 'failed',
+        reason: 'calendar-access-failed',
+        message: '事项已保存，但无法同步到 macOS 日历。请在“系统设置 → 隐私与安全性 → 自动化”中允许 Task Manager Desktop 控制“日历”。'
+      }
+    });
+    expect(store.createTask).toHaveBeenCalledTimes(1);
+  });
 });

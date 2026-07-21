@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { CalendarView } from './CalendarView.jsx';
 import { cleanAssociatedPeople, createEmptyTaskForm, updateTaskFormField } from './taskForm.js';
+import { upsertTaskById } from './taskList.js';
 import './styles.css';
 
 const STATUSES = [
@@ -165,6 +166,7 @@ function App() {
   const [knownPeople, setKnownPeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [calendarSyncWarning, setCalendarSyncWarning] = useState('');
   const [modalTask, setModalTask] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [detailTask, setDetailTask] = useState(null);
@@ -287,8 +289,16 @@ function App() {
         const updated = await getTaskApi().updateTask({ id: modalTask.id, ...taskInput, typeId });
         setTasks((current) => current.map((task) => (task.id === updated.id ? updated : task)));
       } else {
-        const created = await getTaskApi().createTask({ ...taskInput, typeId });
-        setTasks((current) => normalizeSortOrders([...current, created]));
+        const createdResult = await getTaskApi().createTask({ ...taskInput, typeId });
+        const { calendarSync, ...created } = createdResult;
+        setTasks((current) => normalizeSortOrders(upsertTaskById(current, created)));
+        if (calendarSync?.status === 'failed') {
+          setCalendarSyncWarning(calendarSync.message);
+        } else if (calendarSync?.status === 'skipped' && calendarSync.reason === 'invalid-time-range') {
+          setCalendarSyncWarning('事项已保存，但没有同步到 macOS 日历：结束时间需要晚于开始时间。');
+        } else {
+          setCalendarSyncWarning('');
+        }
       }
       setKnownPeople((current) => cleanAssociatedPeople([...(taskInput.associatedPeople || []), ...current]));
       setIsModalOpen(false);
@@ -627,6 +637,12 @@ function App() {
       {error && (
         <div className="alert" role="alert">
           {error}
+        </div>
+      )}
+
+      {calendarSyncWarning && (
+        <div className="alert warning" role="status">
+          {calendarSyncWarning}
         </div>
       )}
 
