@@ -1,6 +1,16 @@
-import peopleModule from '../electron/people.cjs';
-
-const { cleanAssociatedPeople } = peopleModule;
+export function cleanAssociatedPeople(people = []) {
+  const uniqueNames = new Map();
+  for (const value of people) {
+    for (const part of String(value || '').split(/[,，]/)) {
+      const name = part.trim();
+      const key = name.toLocaleLowerCase();
+      if (name && !uniqueNames.has(key)) {
+        uniqueNames.set(key, name);
+      }
+    }
+  }
+  return [...uniqueNames.values()];
+}
 
 function padTwoDigits(value) {
   return String(value).padStart(2, '0');
@@ -13,8 +23,6 @@ function formatLocalDate(date) {
     padTwoDigits(date.getDate())
   ].join('-');
 }
-
-export { cleanAssociatedPeople };
 
 export function createEmptyTaskForm(now = new Date()) {
   const today = formatLocalDate(now);
