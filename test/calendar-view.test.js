@@ -82,4 +82,24 @@ describe('calendar view', () => {
     taskButton.props.onClick();
     expect(onOpenTask).toHaveBeenCalledWith(task);
   });
+
+  it('starts a new task for the double-clicked calendar date', () => {
+    const onCreateTask = vi.fn();
+    const view = CalendarView({
+      tasks: [],
+      currentMonth: new Date(2026, 6, 1),
+      onMonthChange: vi.fn(),
+      onOpenTask: vi.fn(),
+      onCreateTask
+    });
+    const calendarDay = findElement(
+      view,
+      (element) => element.props?.role === 'gridcell' && element.props?.['aria-label'] === '7月17日，0个任务'
+    );
+
+    calendarDay.props.onDoubleClick();
+
+    expect(onCreateTask).toHaveBeenCalledTimes(1);
+    expect(onCreateTask.mock.calls[0][0]).toEqual(new Date(2026, 6, 17));
+  });
 });

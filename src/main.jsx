@@ -168,6 +168,7 @@ function App() {
   const [error, setError] = useState('');
   const [calendarSyncWarning, setCalendarSyncWarning] = useState('');
   const [modalTask, setModalTask] = useState(null);
+  const [newTaskDate, setNewTaskDate] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [detailTask, setDetailTask] = useState(null);
   const [viewMode, setViewMode] = useState('board');
@@ -262,16 +263,18 @@ function App() {
     }
   }
 
-  function openNewTask() {
+  function openNewTask(date = new Date()) {
     if (!activeTypeId) {
       setError('请先创建一个任务类型');
       return;
     }
+    setNewTaskDate(date);
     setModalTask(null);
     setIsModalOpen(true);
   }
 
   function openEditTask(task) {
+    setNewTaskDate(null);
     setModalTask(task);
     setIsModalOpen(true);
   }
@@ -581,7 +584,7 @@ function App() {
             <RefreshCw size={17} className={isRefreshing ? 'spin-icon' : ''} />
             刷新
           </button>
-          <button className="primary-button" type="button" onClick={openNewTask} disabled={!activeTypeId}>
+          <button className="primary-button" type="button" onClick={() => openNewTask()} disabled={!activeTypeId}>
             <Plus size={18} />
             新增任务
           </button>
@@ -658,6 +661,7 @@ function App() {
             currentMonth={calendarMonth}
             onMonthChange={setCalendarMonth}
             onOpenTask={setDetailTask}
+            onCreateTask={openNewTask}
           />
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
@@ -688,6 +692,7 @@ function App() {
       {isModalOpen && (
         <TaskModal
           task={modalTask}
+          initialDate={newTaskDate}
           knownPeople={knownPeople}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveTask}
@@ -941,9 +946,9 @@ function TaskCard({ task, onEdit, onDelete, onToggleSubTask }) {
   );
 }
 
-function TaskModal({ task, knownPeople, onClose, onSave }) {
+function TaskModal({ task, initialDate, knownPeople, onClose, onSave }) {
   const [form, setForm] = useState(() => ({
-    ...(task || createEmptyTaskForm()),
+    ...(task || createEmptyTaskForm(initialDate || new Date())),
     location: task?.location || '',
     associatedPeople: cleanAssociatedPeople(task?.associatedPeople),
     subTasks: normalizeSubTasksForForm(task?.subTasks)

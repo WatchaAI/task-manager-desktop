@@ -35,6 +35,7 @@ function CalendarTaskButton({ task, dateKey, onOpenTask, unscheduled = false }) 
       className={`calendar-task calendar-task-${task.status || 'todo'}`}
       type="button"
       onClick={() => onOpenTask(task)}
+      onDoubleClick={(event) => event.stopPropagation()}
       aria-label={`查看任务详情：${task.title}`}
       title={task.title}
     >
@@ -44,7 +45,7 @@ function CalendarTaskButton({ task, dateKey, onOpenTask, unscheduled = false }) 
   );
 }
 
-export function CalendarView({ tasks, currentMonth, onMonthChange, onOpenTask }) {
+export function CalendarView({ tasks, currentMonth, onMonthChange, onOpenTask, onCreateTask }) {
   const days = buildCalendarDays(currentMonth);
   const todayKey = toDateKey(new Date());
   const unscheduledTasks = getUnscheduledTasks(tasks);
@@ -99,6 +100,7 @@ export function CalendarView({ tasks, currentMonth, onMonthChange, onOpenTask })
               key={day.dateKey}
               aria-label={`${day.date.getMonth() + 1}月${day.date.getDate()}日，${dayTasks.length}个任务`}
               aria-current={isToday ? 'date' : undefined}
+              onDoubleClick={() => onCreateTask(day.date)}
             >
               <span className="calendar-day-number">{day.date.getDate()}</span>
               <div className="calendar-day-tasks">
