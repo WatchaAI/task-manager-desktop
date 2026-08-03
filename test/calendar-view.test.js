@@ -102,4 +102,40 @@ describe('calendar view', () => {
     expect(onCreateTask).toHaveBeenCalledTimes(1);
     expect(onCreateTask.mock.calls[0][0]).toEqual(new Date(2026, 6, 17));
   });
+
+  it('expands a calendar date from its top-right control and can collapse it again', () => {
+    const onExpandedDateChange = vi.fn();
+    const baseProps = {
+      tasks: [],
+      currentMonth: new Date(2026, 6, 1),
+      onMonthChange: vi.fn(),
+      onOpenTask: vi.fn(),
+      onCreateTask: vi.fn(),
+      onExpandedDateChange
+    };
+    const monthView = CalendarView(baseProps);
+    const expandButton = findElement(
+      monthView,
+      (element) => element.props?.['aria-label'] === '放大查看7月17日'
+    );
+
+    expect(expandButton).not.toBeNull();
+    expandButton.props.onClick({ stopPropagation: vi.fn() });
+    expect(onExpandedDateChange).toHaveBeenCalledWith('2026-07-17');
+
+    const expandedView = CalendarView({ ...baseProps, expandedDateKey: '2026-07-17' });
+    const expandedDay = findElement(
+      expandedView,
+      (element) => element.props?.['aria-label'] === '7月17日放大视图，0个任务'
+    );
+    const collapseButton = findElement(
+      expandedView,
+      (element) => element.props?.['aria-label'] === '收起7月17日'
+    );
+
+    expect(expandedDay).not.toBeNull();
+    expect(collapseButton).not.toBeNull();
+    collapseButton.props.onClick();
+    expect(onExpandedDateChange).toHaveBeenLastCalledWith(null);
+  });
 });

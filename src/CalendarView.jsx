@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
 import {
   buildCalendarDays,
   getTaskDateKeys,
@@ -29,6 +29,10 @@ function moveMonth(date, offset) {
   return new Date(date.getFullYear(), date.getMonth() + offset, 1);
 }
 
+function formatDayLabel(date) {
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
 function CalendarTaskButton({ task, dateKey, onOpenTask, unscheduled = false }) {
   return (
     <button
@@ -45,10 +49,25 @@ function CalendarTaskButton({ task, dateKey, onOpenTask, unscheduled = false }) 
   );
 }
 
-export function CalendarView({ tasks, currentMonth, onMonthChange, onOpenTask, onCreateTask }) {
+export function CalendarView({
+  tasks,
+  currentMonth,
+  onMonthChange,
+  onOpenTask,
+  onCreateTask,
+  expandedDateKey = null,
+  onExpandedDateChange
+}) {
   const days = buildCalendarDays(currentMonth);
   const todayKey = toDateKey(new Date());
   const unscheduledTasks = getUnscheduledTasks(tasks);
+  const expandedDay = days.find((day) => day.dateKey === expandedDateKey);
+  const expandedDayTasks = expandedDay ? getTasksForCalendarDay(tasks, expandedDay.dateKey) : [];
+
+  function changeMonth(date) {
+    onExpandedDateChange(null);
+    onMonthChange(date);
+  }
 
   return (
     <section className="calendar-view" aria-label="任务日历">
@@ -61,7 +80,7 @@ export function CalendarView({ tasks, currentMonth, onMonthChange, onOpenTask, o
           <button
             className="icon-button calendar-nav-button"
             type="button"
-            onClick={() => onMonthChange(moveMonth(currentMonth, -1))}
+            onClick={() => changeMonth(moveMonth(currentMonth, -1))}
             aria-label="上个月"
           >
             <ChevronLeft size={18} />
@@ -69,14 +88,14 @@ export function CalendarView({ tasks, currentMonth, onMonthChange, onOpenTask, o
           <button
             className="secondary-button calendar-today-button"
             type="button"
-            onClick={() => onMonthChange(new Date())}
+            onClick={() => changeMonth(new Date())}
           >
             今天
           </button>
           <button
             className="icon-button calendar-nav-button"
             type="button"
-            onClick={() => onMonthChange(moveMonth(currentMonth, 1))}
+            onClick={() => changeMonth(moveMonth(currentMonth, 1))}
             aria-label="下个月"
           >
             <ChevronRight size={18} />
@@ -84,39 +103,94 @@ export function CalendarView({ tasks, currentMonth, onMonthChange, onOpenTask, o
         </div>
       </div>
 
-      <div className="calendar-grid" role="grid" aria-label={formatMonthTitle(currentMonth)}>
-        {WEEKDAYS.map((weekday) => (
-          <div className="calendar-weekday" role="columnheader" key={weekday}>
-            {weekday}
-          </div>
-        ))}
-        {days.map((day) => {
-          const dayTasks = getTasksForCalendarDay(tasks, day.dateKey);
-          const isToday = day.dateKey === todayKey;
-          return (
-            <div
-              className={`calendar-day ${day.isCurrentMonth ? '' : 'outside-month'} ${isToday ? 'today' : ''}`}
-              role="gridcell"
-              key={day.dateKey}
-              aria-label={`${day.date.getMonth() + 1}月${day.date.getDate()}日，${dayTasks.length}个任务`}
-              aria-current={isToday ? 'date' : undefined}
-              onDoubleClick={() => onCreateTask(day.date)}
-            >
-              <span className="calendar-day-number">{day.date.getDate()}</span>
-              <div className="calendar-day-tasks">
-                {dayTasks.map((task) => (
-                  <CalendarTaskButton
-                    key={task.id}
-                    task={task}
-                    dateKey={day.dateKey}
-                    onOpenTask={onOpenTask}
-                  />
-                ))}
-              </div>
+      {expandedDay ? (
+        <div
+          className={`calendar-expanded-day ${expandedDay.dateKey === todayKey ? 'today' : ''}`}
+          role="region"
+          aria-label={`${formatDayLabel(expandedDay.date)}放大视图，${expandedDayTasks.length}个任务`}
+          onDoubleClick={() => onCreateTask(expandedDay.date)}
+        >
+          <div className="calendar-expanded-header">
+            <div>
+              <p className="calendar-kicker">当天任务 · {expandedDayTasks.length}</p>
+              <h3>{formatDayLabel(expandedDay.date)}</h3>
             </div>
-          );
-        })}
-      </div>
+            <button
+              className="icon-button calendar-collapse-button"
+              type="button"
+              onClick={() => onExpandedDateChange(null)}
+              onDoubleClick={(event) => event.stopPropagation()}
+              aria-label={`收起${formatDayLabel(expandedDay.date)}`}
+              title="收起当天视图"
+            >
+              <Minimize2 size={18} />
+            </button>
+          </div>
+          <div className="calendar-expanded-tasks">
+            {expandedDayTasks.length > 0 ? (
+              expandedDayTasks.map((task) => (
+                <CalendarTaskButton
+                  key={task.id}
+                  task={task}
+                  dateKey={expandedDay.dateKey}
+                  onOpenTask={onOpenTask}
+                />
+              ))
+            ) : (
+              <div className="calendar-expanded-empty">当天还没有任务，双击空白处即可新建</div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="calendar-grid" role="grid" aria-label={formatMonthTitle(currentMonth)}>
+          {WEEKDAYS.map((weekday) => (
+            <div className="calendar-weekday" role="columnheader" key={weekday}>
+              {weekday}
+            </div>
+          ))}
+          {days.map((day) => {
+            const dayTasks = getTasksForCalendarDay(tasks, day.dateKey);
+            const isToday = day.dateKey === todayKey;
+            return (
+              <div
+                className={`calendar-day ${day.isCurrentMonth ? '' : 'outside-month'} ${isToday ? 'today' : ''}`}
+                role="gridcell"
+                key={day.dateKey}
+                aria-label={`${formatDayLabel(day.date)}，${dayTasks.length}个任务`}
+                aria-current={isToday ? 'date' : undefined}
+                onDoubleClick={() => onCreateTask(day.date)}
+              >
+                <div className="calendar-day-header">
+                  <span className="calendar-day-number">{day.date.getDate()}</span>
+                  <button
+                    className="calendar-expand-button"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onExpandedDateChange(day.dateKey);
+                    }}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    aria-label={`放大查看${formatDayLabel(day.date)}`}
+                    title="放大当天视图"
+                  >
+                    <Maximize2 size={13} />
+                  </button>
+                </div>
+                <div className="calendar-day-tasks">
+                  {dayTasks.map((task) => (
+                    <CalendarTaskButton
+                      key={task.id}
+                      task={task}
+                      dateKey={day.dateKey}
+                      onOpenTask={onOpenTask}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {unscheduledTasks.length > 0 && (
         <div className="calendar-unscheduled">

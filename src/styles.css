@@ -552,6 +552,14 @@ h1 {
   background: #ffffff;
 }
 
+.calendar-day-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 25px;
+}
+
 .calendar-day:nth-child(7n + 7) {
   border-right: 0;
 }
@@ -580,6 +588,107 @@ h1 {
 .calendar-day.today .calendar-day-number {
   background: #2563eb;
   color: #ffffff;
+}
+
+.calendar-expand-button {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #7b8798;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.calendar-day:hover .calendar-expand-button,
+.calendar-expand-button:focus-visible {
+  opacity: 1;
+}
+
+.calendar-expand-button:hover,
+.calendar-expand-button:focus-visible {
+  background: #edf3fc;
+  color: #315f9f;
+  outline: none;
+}
+
+.calendar-expanded-day {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 18px;
+  background: #ffffff;
+}
+
+.calendar-expanded-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e7ebf2;
+}
+
+.calendar-expanded-header h3 {
+  color: #172033;
+  font-size: 24px;
+  font-weight: 780;
+}
+
+.calendar-expanded-day.today .calendar-expanded-header h3 {
+  color: #2563eb;
+}
+
+.calendar-collapse-button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #dce3ed;
+  background: #ffffff;
+  color: #435168;
+}
+
+.calendar-collapse-button:hover {
+  border-color: #bfd0eb;
+  background: #f5f8fc;
+}
+
+.calendar-expanded-tasks {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 14px;
+}
+
+.calendar-expanded-tasks .calendar-task {
+  min-height: 38px;
+  gap: 10px;
+  padding: 8px 11px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.calendar-expanded-empty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  border: 1px dashed #d9e1ec;
+  border-radius: 8px;
+  background: #fafbfd;
+  color: #8a96a8;
+  font-size: 13px;
 }
 
 .calendar-day-tasks {
@@ -1426,6 +1535,16 @@ h1 {
   .calendar-day-number {
     width: 21px;
     height: 21px;
+  }
+
+  .calendar-day-header {
+    min-height: 21px;
+  }
+}
+
+@media (hover: none) {
+  .calendar-expand-button {
+    opacity: 1;
   }
 }
 

@@ -173,6 +173,7 @@ function App() {
   const [detailTask, setDetailTask] = useState(null);
   const [viewMode, setViewMode] = useState('board');
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [expandedCalendarDateKey, setExpandedCalendarDateKey] = useState(null);
   const [taskPendingDelete, setTaskPendingDelete] = useState(null);
   const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
@@ -662,6 +663,8 @@ function App() {
             onMonthChange={setCalendarMonth}
             onOpenTask={setDetailTask}
             onCreateTask={openNewTask}
+            expandedDateKey={expandedCalendarDateKey}
+            onExpandedDateChange={setExpandedCalendarDateKey}
           />
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
