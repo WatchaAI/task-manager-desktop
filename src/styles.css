@@ -482,6 +482,37 @@ h1 {
   font-weight: 780;
 }
 
+.calendar-scope-switcher {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid #d9e0ea;
+  border-radius: 9px;
+  background: #eef2f7;
+}
+
+.calendar-scope-switcher button {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #657184;
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.calendar-scope-switcher button:hover {
+  color: #263246;
+}
+
+.calendar-scope-switcher button.active {
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: 0 2px 7px rgba(31, 41, 55, 0.1);
+}
+
 .calendar-kicker,
 .details-kicker {
   margin-bottom: 3px;

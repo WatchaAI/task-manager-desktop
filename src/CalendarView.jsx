@@ -7,6 +7,7 @@ import {
   getUnscheduledTasks,
   toDateKey
 } from './calendar.js';
+import { CALENDAR_SCOPES } from './viewState.js';
 
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
@@ -55,6 +56,8 @@ export function CalendarView({
   onMonthChange,
   onOpenTask,
   onCreateTask,
+  scope = CALENDAR_SCOPES.ALL,
+  onScopeChange,
   expandedDateKey = null,
   onExpandedDateChange
 }) {
@@ -75,6 +78,24 @@ export function CalendarView({
         <div>
           <p className="calendar-kicker">按日期查看任务</p>
           <h2>{formatMonthTitle(currentMonth)}</h2>
+        </div>
+        <div className="calendar-scope-switcher" role="group" aria-label="日历任务范围">
+          <button
+            className={scope === CALENDAR_SCOPES.ALL ? 'active' : ''}
+            type="button"
+            onClick={() => onScopeChange(CALENDAR_SCOPES.ALL)}
+            aria-pressed={scope === CALENDAR_SCOPES.ALL}
+          >
+            查看所有
+          </button>
+          <button
+            className={scope === CALENDAR_SCOPES.CURRENT ? 'active' : ''}
+            type="button"
+            onClick={() => onScopeChange(CALENDAR_SCOPES.CURRENT)}
+            aria-pressed={scope === CALENDAR_SCOPES.CURRENT}
+          >
+            查看当前
+          </button>
         </div>
         <div className="calendar-navigation" aria-label="切换月份">
           <button

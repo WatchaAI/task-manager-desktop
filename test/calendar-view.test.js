@@ -26,6 +26,27 @@ function findElement(node, predicate) {
 }
 
 describe('calendar view', () => {
+  it('shows all and current task type scope controls', () => {
+    const onScopeChange = vi.fn();
+    const view = CalendarView({
+      tasks: [],
+      currentMonth: new Date(2026, 6, 1),
+      onMonthChange: vi.fn(),
+      onOpenTask: vi.fn(),
+      onCreateTask: vi.fn(),
+      onExpandedDateChange: vi.fn(),
+      scope: 'all',
+      onScopeChange
+    });
+    const allButton = findElement(view, (element) => element.props?.children === '查看所有');
+    const currentButton = findElement(view, (element) => element.props?.children === '查看当前');
+
+    expect(allButton.props['aria-pressed']).toBe(true);
+    expect(currentButton.props['aria-pressed']).toBe(false);
+    currentButton.props.onClick();
+    expect(onScopeChange).toHaveBeenCalledWith('current');
+  });
+
   it('builds a six-week Monday-first grid for the selected month', () => {
     const days = buildCalendarDays(new Date(2026, 6, 1));
 

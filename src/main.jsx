@@ -41,6 +41,7 @@ import {
 import { CalendarView } from './CalendarView.jsx';
 import { cleanAssociatedPeople, createEmptyTaskForm, updateTaskFormField } from './taskForm.js';
 import { upsertTaskById } from './taskList.js';
+import { CALENDAR_SCOPES, getCalendarTaskTypeId, transitionViewState } from './viewState.js';
 import './styles.css';
 
 const STATUSES = [
@@ -171,7 +172,8 @@ function App() {
   const [newTaskDate, setNewTaskDate] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [detailTask, setDetailTask] = useState(null);
-  const [viewMode, setViewMode] = useState('board');
+  const [viewState, setViewState] = useState({ mode: 'board', calendarScope: CALENDAR_SCOPES.ALL });
+  const [allTasks, setAllTasks] = useState([]);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [expandedCalendarDateKey, setExpandedCalendarDateKey] = useState(null);
   const [taskPendingDelete, setTaskPendingDelete] = useState(null);
@@ -180,6 +182,9 @@ function App() {
   const [editingTypeId, setEditingTypeId] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const activeTypeIdRef = useRef(null);
+  const viewStateRef = useRef(viewState);
+
+  const { mode: viewMode, calendarScope } = viewState;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -191,6 +196,7 @@ function App() {
   );
 
   const grouped = useMemo(() => groupTasks(tasks), [tasks]);
+  const calendarTasks = calendarScope === CALENDAR_SCOPES.ALL ? allTasks : tasks;
   const totalTasks = tasks.length;
   const doneTasks = grouped.done.length;
   const activeTasks = grouped.todo.length + grouped.in_progress.length;
@@ -225,7 +231,7 @@ function App() {
   async function loadTasks(typeId = activeTypeId) {
     if (!typeId) {
       setTasks([]);
-      return;
+      return [];
     }
 
     try {
@@ -233,10 +239,33 @@ function App() {
       setError('');
       const loadedTasks = await getTaskApi().listTasks(typeId);
       setTasks(loadedTasks);
+      return loadedTasks;
     } catch (err) {
       setError(err.message || '加载任务失败');
+      return [];
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadAllTasks({ showLoading = true } = {}) {
+    try {
+      if (showLoading) {
+        setLoading(true);
+      }
+      setError('');
+      const loadedTasks = await getTaskApi().listTasks(
+        getCalendarTaskTypeId(CALENDAR_SCOPES.ALL, activeTypeIdRef.current)
+      );
+      setAllTasks(loadedTasks);
+      return loadedTasks;
+    } catch (err) {
+      setError(err.message || '加载日历任务失败');
+      return [];
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }
 
@@ -249,8 +278,18 @@ function App() {
   }, [activeTypeId]);
 
   useEffect(() => {
+    viewStateRef.current = viewState;
+  }, [viewState]);
+
+  useEffect(() => {
     const unsubscribe = getTaskApi().onTasksChanged?.(() => {
       loadBoardData({ preferredTypeId: activeTypeIdRef.current, showLoading: false });
+      if (
+        viewStateRef.current.mode === 'calendar' &&
+        viewStateRef.current.calendarScope === CALENDAR_SCOPES.ALL
+      ) {
+        loadAllTasks({ showLoading: false });
+      }
     });
     return unsubscribe;
   }, []);
@@ -258,9 +297,34 @@ function App() {
   async function handleRefresh() {
     try {
       setIsRefreshing(true);
-      await loadBoardData({ preferredTypeId: activeTypeIdRef.current, showLoading: false });
+      await Promise.all([
+        loadBoardData({ preferredTypeId: activeTypeIdRef.current, showLoading: false }),
+        viewMode === 'calendar' && calendarScope === CALENDAR_SCOPES.ALL
+          ? loadAllTasks({ showLoading: false })
+          : Promise.resolve()
+      ]);
     } finally {
       setIsRefreshing(false);
+    }
+  }
+
+  async function handleShowCalendar() {
+    const nextViewState = transitionViewState(viewState, { type: 'show-calendar' });
+    if (nextViewState === viewState) {
+      return;
+    }
+    setViewState(nextViewState);
+    await loadAllTasks();
+  }
+
+  function handleShowBoard() {
+    setViewState((current) => transitionViewState(current, { type: 'show-board' }));
+  }
+
+  async function handleCalendarScopeChange(scope) {
+    setViewState((current) => transitionViewState(current, { type: 'set-calendar-scope', scope }));
+    if (scope === CALENDAR_SCOPES.ALL) {
+      await loadAllTasks();
     }
   }
 
@@ -285,17 +349,27 @@ function App() {
     openEditTask(task);
   }
 
+  function updateVisibleTaskCollections(savedTask) {
+    if (savedTask.typeId === activeTypeIdRef.current) {
+      setTasks((current) => normalizeSortOrders(upsertTaskById(current, savedTask)));
+    } else {
+      setTasks((current) => current.filter((task) => task.id !== savedTask.id));
+    }
+
+    setAllTasks((current) => upsertTaskById(current, savedTask));
+  }
+
   async function handleSaveTask(taskInput) {
     try {
       setError('');
       const typeId = modalTask?.typeId || activeTypeId;
       if (modalTask) {
         const updated = await getTaskApi().updateTask({ id: modalTask.id, ...taskInput, typeId });
-        setTasks((current) => current.map((task) => (task.id === updated.id ? updated : task)));
+        updateVisibleTaskCollections(updated);
       } else {
         const createdResult = await getTaskApi().createTask({ ...taskInput, typeId });
         const { calendarSync, ...created } = createdResult;
-        setTasks((current) => normalizeSortOrders(upsertTaskById(current, created)));
+        updateVisibleTaskCollections(created);
         if (calendarSync?.status === 'failed') {
           setCalendarSyncWarning(calendarSync.message);
         } else if (calendarSync?.status === 'skipped' && calendarSync.reason === 'invalid-time-range') {
@@ -327,6 +401,7 @@ function App() {
       setError('');
       await getTaskApi().deleteTask(taskPendingDelete.id);
       setTasks((current) => normalizeSortOrders(current.filter((task) => task.id !== taskPendingDelete.id)));
+      setAllTasks((current) => current.filter((task) => task.id !== taskPendingDelete.id));
       setTaskPendingDelete(null);
     } catch (err) {
       setError(err.message || '删除任务失败');
@@ -432,7 +507,7 @@ function App() {
       return;
     }
 
-    const taskCount = type.id === activeTypeId ? totalTasks : null;
+    const taskCount = type.id === activeTypeId ? tasks.length : null;
     const taskHint =
       taskCount === null
         ? '该类型下的任务也会一起删除。'
@@ -449,6 +524,7 @@ function App() {
       if (editingTypeId === type.id) {
         cancelEditType();
       }
+      setAllTasks((current) => current.filter((task) => task.typeId !== type.id));
 
       if (type.id === activeTypeId) {
         const nextTypeId = remainingTypes[0]?.id || null;
@@ -559,7 +635,7 @@ function App() {
             <button
               className={viewMode === 'board' ? 'active' : ''}
               type="button"
-              onClick={() => setViewMode('board')}
+              onClick={handleShowBoard}
               aria-pressed={viewMode === 'board'}
             >
               <LayoutDashboard size={16} />
@@ -568,7 +644,7 @@ function App() {
             <button
               className={viewMode === 'calendar' ? 'active' : ''}
               type="button"
-              onClick={() => setViewMode('calendar')}
+              onClick={handleShowCalendar}
               aria-pressed={viewMode === 'calendar'}
             >
               <CalendarDays size={16} />
@@ -658,11 +734,13 @@ function App() {
       ) : (
         viewMode === 'calendar' ? (
           <CalendarView
-            tasks={tasks}
+            tasks={calendarTasks}
             currentMonth={calendarMonth}
             onMonthChange={setCalendarMonth}
             onOpenTask={setDetailTask}
             onCreateTask={openNewTask}
+            scope={calendarScope}
+            onScopeChange={handleCalendarScopeChange}
             expandedDateKey={expandedCalendarDateKey}
             onExpandedDateChange={setExpandedCalendarDateKey}
           />
