@@ -14,5 +14,6 @@ describe('task card status colors', () => {
     expect(styles).toMatch(/\.task-card-todo\s*\{[^}]*--task-bg:/s);
     expect(styles).toMatch(/\.task-card-in_progress\s*\{[^}]*--task-bg:/s);
     expect(styles).toMatch(/\.task-card-done\s*\{[^}]*--task-bg:/s);
+    expect(styles).toMatch(/\.task-card-canceled\s*\{[^}]*--task-bg:/s);
   });
 });

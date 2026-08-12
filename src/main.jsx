@@ -24,6 +24,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Circle,
+  CircleX,
   Clock3,
   GripVertical,
   LayoutDashboard,
@@ -62,6 +63,12 @@ const STATUSES = [
     label: '完成',
     icon: CheckCircle2,
     tone: 'green'
+  },
+  {
+    id: 'canceled',
+    label: '已取消',
+    icon: CircleX,
+    tone: 'gray'
   }
 ];
 
@@ -73,7 +80,7 @@ function getTaskApi() {
 }
 
 function normalizeSortOrders(tasks) {
-  const counters = { todo: 0, in_progress: 0, done: 0 };
+  const counters = Object.fromEntries(STATUSES.map((status) => [status.id, 0]));
   return tasks.map((task) => {
     const sortOrder = counters[task.status];
     counters[task.status] += 1;
@@ -199,6 +206,7 @@ function App() {
   const calendarTasks = calendarScope === CALENDAR_SCOPES.ALL ? allTasks : tasks;
   const totalTasks = tasks.length;
   const doneTasks = grouped.done.length;
+  const canceledTasks = grouped.canceled.length;
   const activeTasks = grouped.todo.length + grouped.in_progress.length;
   const activeType = taskTypes.find((type) => type.id === activeTypeId);
 
@@ -630,6 +638,7 @@ function App() {
             <span>{totalTasks} 个任务</span>
             <span>{activeTasks} 个未完成</span>
             <span>{doneTasks} 个完成</span>
+            <span>{canceledTasks} 个已取消</span>
           </div>
           <div className="view-switcher" role="group" aria-label="切换视图">
             <button

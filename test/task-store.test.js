@@ -72,6 +72,17 @@ describe('task store', () => {
         associatedPeople: []
       }
     ]);
+
+    const canceledTask = store.createTask({
+      title: '不再处理的任务',
+      status: 'canceled',
+      typeId: defaultType.id
+    });
+
+    expect(canceledTask).toMatchObject({
+      title: '不再处理的任务',
+      status: 'canceled'
+    });
   });
 
   it('seeds default task types for switching boards', () => {

@@ -1,8 +1,31 @@
 const Database = require('better-sqlite3');
 const { cleanAssociatedPeople } = require('./people.cjs');
 
-const STATUSES = new Set(['todo', 'in_progress', 'done']);
+const TASK_STATUS_ORDER = ['todo', 'in_progress', 'done', 'canceled'];
+const STATUSES = new Set(TASK_STATUS_ORDER);
 const DEFAULT_TASK_TYPES = ['工作', '学习', '日常'];
+
+function createTasksTableSql(tableName, ifNotExists = false) {
+  const statusValues = TASK_STATUS_ORDER.map((status) => `'${status}'`).join(', ');
+  return `
+    CREATE TABLE ${ifNotExists ? 'IF NOT EXISTS ' : ''}${tableName} (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type_id INTEGER NOT NULL DEFAULT 1,
+      title TEXT NOT NULL,
+      start_time TEXT NOT NULL DEFAULT '',
+      end_time TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      location TEXT NOT NULL DEFAULT '',
+      associated_people TEXT NOT NULL DEFAULT '[]',
+      sub_tasks TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL CHECK(status IN (${statusValues})),
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (type_id) REFERENCES task_types(id) ON DELETE CASCADE
+    );
+  `;
+}
 
 function createTaskStore(dbPath) {
   const db = new Database(dbPath);
@@ -25,22 +48,7 @@ function createTaskStore(dbPath) {
       last_used_at TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS tasks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      type_id INTEGER NOT NULL DEFAULT 1,
-      title TEXT NOT NULL,
-      start_time TEXT NOT NULL DEFAULT '',
-      end_time TEXT NOT NULL DEFAULT '',
-      description TEXT NOT NULL DEFAULT '',
-      location TEXT NOT NULL DEFAULT '',
-      associated_people TEXT NOT NULL DEFAULT '[]',
-      sub_tasks TEXT NOT NULL DEFAULT '[]',
-      status TEXT NOT NULL CHECK(status IN ('todo', 'in_progress', 'done')),
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (type_id) REFERENCES task_types(id) ON DELETE CASCADE
-    );
+    ${createTasksTableSql('tasks', true)}
   `);
 
   seedDefaultTaskTypes();
@@ -57,6 +65,52 @@ function createTaskStore(dbPath) {
   }
   if (!columns.some((column) => column.name === 'associated_people')) {
     db.prepare("ALTER TABLE tasks ADD COLUMN associated_people TEXT NOT NULL DEFAULT '[]'").run();
+  }
+
+  const tasksTableSql = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tasks'")
+    .get()?.sql;
+  if (tasksTableSql && !tasksTableSql.includes("'canceled'")) {
+    db.transaction(() => {
+      db.exec(`
+        ALTER TABLE tasks RENAME TO tasks_before_canceled_status;
+
+        ${createTasksTableSql('tasks')}
+
+        INSERT INTO tasks (
+          id,
+          type_id,
+          title,
+          start_time,
+          end_time,
+          description,
+          location,
+          associated_people,
+          sub_tasks,
+          status,
+          sort_order,
+          created_at,
+          updated_at
+        )
+        SELECT
+          id,
+          type_id,
+          title,
+          start_time,
+          end_time,
+          description,
+          location,
+          associated_people,
+          sub_tasks,
+          status,
+          sort_order,
+          created_at,
+          updated_at
+        FROM tasks_before_canceled_status;
+
+        DROP TABLE tasks_before_canceled_status;
+      `);
+    })();
   }
 
   db.exec(`
@@ -350,9 +404,7 @@ function createTaskStore(dbPath) {
         ORDER BY
           type_id ASC,
           CASE status
-            WHEN 'todo' THEN 0
-            WHEN 'in_progress' THEN 1
-            WHEN 'done' THEN 2
+            ${TASK_STATUS_ORDER.map((status, index) => `WHEN '${status}' THEN ${index}`).join('\n            ')}
           END,
           sort_order ASC,
           created_at ASC

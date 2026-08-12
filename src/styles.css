@@ -442,7 +442,7 @@ h1 {
 .board {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: repeat(3, minmax(280px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 18px;
   width: 100%;
   max-width: 1380px;
@@ -781,6 +781,13 @@ h1 {
   --status-text: #237441;
 }
 
+.calendar-task-canceled,
+.details-status-canceled {
+  --status-bg: #f3f4f6;
+  --status-border: #d9dde3;
+  --status-text: #667085;
+}
+
 .calendar-task-time {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
@@ -870,6 +877,10 @@ h1 {
 
 .column-green .column-title svg {
   color: #16a34a;
+}
+
+.column-gray .column-title svg {
+  color: #7c8798;
 }
 
 .count-badge {
@@ -972,6 +983,13 @@ h1 {
   --task-bg: linear-gradient(135deg, #f2fbf5 0%, #ffffff 76%);
   --task-bg-hover: linear-gradient(135deg, #e6f8ec 0%, #ffffff 76%);
   --task-border: #ccebd5;
+}
+
+.task-card-canceled {
+  --task-accent: #98a2b3;
+  --task-bg: linear-gradient(135deg, #f5f6f8 0%, #ffffff 76%);
+  --task-bg-hover: linear-gradient(135deg, #eceef2 0%, #ffffff 76%);
+  --task-border: #dfe3e8;
 }
 
 .task-card.dragging {
