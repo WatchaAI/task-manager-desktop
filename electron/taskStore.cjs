@@ -471,6 +471,9 @@ function createTaskStore(dbPath) {
     }
 
     const task = normalizeTaskInput({ ...existing, ...input });
+    const sortOrder = task.typeId === existing.typeId
+      ? existing.sortOrder
+      : nextSortOrder(task.typeId, task.status);
     const now = new Date().toISOString();
     db.prepare(
       `
@@ -484,6 +487,7 @@ function createTaskStore(dbPath) {
           associated_people = ?,
           sub_tasks = ?,
           status = ?,
+          sort_order = ?,
           updated_at = ?
       WHERE id = ?
     `
@@ -497,6 +501,7 @@ function createTaskStore(dbPath) {
       JSON.stringify(task.associatedPeople),
       JSON.stringify(task.subTasks),
       task.status,
+      sortOrder,
       now,
       id
     );

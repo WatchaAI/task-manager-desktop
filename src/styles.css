@@ -1217,7 +1217,8 @@ h1 {
   gap: 8px;
 }
 
-.details-meta > span {
+.details-meta > span,
+.details-category {
   min-height: 30px;
   display: inline-flex;
   align-items: center;
@@ -1229,6 +1230,21 @@ h1 {
   color: #526176;
   font-size: 12px;
   font-weight: 680;
+}
+
+.details-category select {
+  max-width: 150px;
+  border: 0;
+  background: transparent;
+  color: #1d4ed8;
+  font: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+.details-category:focus-within {
+  border-color: #7aa7ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .details-meta .details-status {

@@ -395,6 +395,21 @@ function App() {
     }
   }
 
+  async function handleChangeTaskType(task, typeId) {
+    if (task.typeId === typeId) {
+      return;
+    }
+
+    try {
+      setError('');
+      const updated = await getTaskApi().updateTask({ id: task.id, typeId });
+      updateVisibleTaskCollections(updated);
+      setDetailTask(updated);
+    } catch (err) {
+      setError(err.message || '修改任务分类失败');
+    }
+  }
+
   function handleRequestDeleteTask(task) {
     setTaskPendingDelete(task);
   }
@@ -774,8 +789,10 @@ function App() {
       {detailTask && (
         <TaskDetailsModal
           task={detailTask}
+          taskTypes={taskTypes}
           onClose={() => setDetailTask(null)}
           onEdit={editTaskFromDetails}
+          onChangeType={handleChangeTaskType}
         />
       )}
 
@@ -1331,7 +1348,7 @@ function TaskModal({ task, initialDate, knownPeople, onClose, onSave }) {
   );
 }
 
-function TaskDetailsModal({ task, onClose, onEdit }) {
+function TaskDetailsModal({ task, taskTypes, onClose, onEdit, onChangeType }) {
   const status = STATUSES.find((item) => item.id === task.status) || STATUSES[0];
   const StatusIcon = status.icon;
   const subTasks = normalizeSubTasksForForm(task.subTasks);
@@ -1351,6 +1368,21 @@ function TaskDetailsModal({ task, onClose, onEdit }) {
         </div>
 
         <div className="details-meta">
+          <label className="details-category">
+            <Layers2 size={15} />
+            <span>分类</span>
+            <select
+              aria-label="调整任务分类"
+              value={task.typeId}
+              onChange={(event) => onChangeType(task, Number(event.target.value))}
+            >
+              {taskTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <span className={`details-status details-status-${status.id}`}>
             <StatusIcon size={15} />
             {status.label}

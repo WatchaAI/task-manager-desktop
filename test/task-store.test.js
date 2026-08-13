@@ -185,6 +185,22 @@ describe('task store', () => {
     expect(store.listTasks(learning.id)).toMatchObject([{ id: learningTask.id, title: '读论文', typeId: learning.id }]);
   });
 
+  it('moves a task to the end of its new category', () => {
+    const [work, learning] = store.listTaskTypes();
+    const movedTask = store.createTask({ title: '调整分类', status: 'todo', typeId: work.id });
+    store.createTask({ title: '学习任务一', status: 'todo', typeId: learning.id });
+    store.createTask({ title: '学习任务二', status: 'todo', typeId: learning.id });
+
+    const updated = store.updateTask(movedTask.id, { typeId: learning.id });
+
+    expect(updated).toMatchObject({ typeId: learning.id, sortOrder: 2 });
+    expect(store.listTasks(learning.id).map((task) => task.title)).toEqual([
+      '学习任务一',
+      '学习任务二',
+      '调整分类'
+    ]);
+  });
+
   it('keeps sort order independent across task types', () => {
     const [work, learning] = store.listTaskTypes();
 
