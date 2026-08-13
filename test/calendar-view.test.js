@@ -104,6 +104,56 @@ describe('calendar view', () => {
     expect(onOpenTask).toHaveBeenCalledWith(task);
   });
 
+  it('hides canceled tasks from the calendar', () => {
+    const tasks = [
+      {
+        id: 8,
+        title: '保留在日历中的任务',
+        startTime: '2026-07-17T09:00',
+        endTime: '2026-07-17T10:00',
+        status: 'todo'
+      },
+      {
+        id: 9,
+        title: '已取消的定时任务',
+        startTime: '2026-07-17T11:00',
+        endTime: '2026-07-17T12:00',
+        status: 'canceled'
+      },
+      {
+        id: 10,
+        title: '已取消的未安排任务',
+        startTime: '',
+        endTime: '',
+        status: 'canceled'
+      }
+    ];
+    const view = CalendarView({
+      tasks,
+      currentMonth: new Date(2026, 6, 1),
+      onMonthChange: vi.fn(),
+      onOpenTask: vi.fn(),
+      onCreateTask: vi.fn(),
+      onExpandedDateChange: vi.fn()
+    });
+    const calendarDay = findElement(
+      view,
+      (element) => element.props?.role === 'gridcell' && element.props?.['aria-label'] === '7月17日，1个任务'
+    );
+    const canceledTask = findElement(
+      view,
+      (element) => element.props?.['aria-label'] === '查看任务详情：已取消的定时任务'
+    );
+    const unscheduledSection = findElement(
+      view,
+      (element) => String(element.props?.children || '').includes('未安排 ·')
+    );
+
+    expect(calendarDay).not.toBeNull();
+    expect(canceledTask).toBeNull();
+    expect(unscheduledSection).toBeNull();
+  });
+
   it('starts a new task for the double-clicked calendar date', () => {
     const onCreateTask = vi.fn();
     const view = CalendarView({

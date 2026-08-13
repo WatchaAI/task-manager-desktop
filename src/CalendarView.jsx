@@ -61,11 +61,12 @@ export function CalendarView({
   expandedDateKey = null,
   onExpandedDateChange
 }) {
+  const visibleTasks = tasks.filter((task) => task.status !== 'canceled');
   const days = buildCalendarDays(currentMonth);
   const todayKey = toDateKey(new Date());
-  const unscheduledTasks = getUnscheduledTasks(tasks);
+  const unscheduledTasks = getUnscheduledTasks(visibleTasks);
   const expandedDay = days.find((day) => day.dateKey === expandedDateKey);
-  const expandedDayTasks = expandedDay ? getTasksForCalendarDay(tasks, expandedDay.dateKey) : [];
+  const expandedDayTasks = expandedDay ? getTasksForCalendarDay(visibleTasks, expandedDay.dateKey) : [];
 
   function changeMonth(date) {
     onExpandedDateChange(null);
@@ -170,7 +171,7 @@ export function CalendarView({
             </div>
           ))}
           {days.map((day) => {
-            const dayTasks = getTasksForCalendarDay(tasks, day.dateKey);
+            const dayTasks = getTasksForCalendarDay(visibleTasks, day.dateKey);
             const isToday = day.dateKey === todayKey;
             return (
               <div
