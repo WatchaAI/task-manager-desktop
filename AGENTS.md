@@ -5,15 +5,25 @@
 - 仓库内每次完成任何修改（包括代码、配置和文档）后，都必须依次完成：自测、提交、推送、停止旧进程、重新打包、安装到 `/Applications`、启动已安装版本和基础验证。不要只运行开发模式或 `release/` 中的临时产物。
 - 自测至少运行 `npm test`；根据修改范围补充相关检查。打包使用 `npm run dist`。
 - 安装时先停止 `Task Manager Desktop` 旧进程，再用本次生成的 `release/mac-*/Task Manager Desktop.app` 覆盖 `/Applications/Task Manager Desktop.app`，然后从 `/Applications` 启动。覆盖应用包不得删除或改动 Electron `userData` 目录中的本地数据。
-- 打包完成后使用下面的安装命令；`rm -rf` 只允许作用于这个明确的应用包路径：
+- 打包完成后使用下面的安装命令。旧应用先移动到临时备份目录，不直接删除；如果安装失败，保留备份并恢复旧版本：
 
   ```bash
   task_manager_bundle_path="$(find release -maxdepth 2 -type d -name 'Task Manager Desktop.app' -print -quit)"
   test -n "$task_manager_bundle_path"
+  task_manager_install_path='/Applications/Task Manager Desktop.app'
+  task_manager_staging_dir="$(mktemp -d)"
+  ditto "$task_manager_bundle_path" "$task_manager_staging_dir/Task Manager Desktop.app"
+  codesign --verify --deep --strict "$task_manager_staging_dir/Task Manager Desktop.app"
   pkill -x 'Task Manager Desktop' 2>/dev/null || true
-  rm -rf '/Applications/Task Manager Desktop.app'
-  ditto "$task_manager_bundle_path" '/Applications/Task Manager Desktop.app'
-  open '/Applications/Task Manager Desktop.app'
+  if test -d "$task_manager_install_path"; then
+    mv "$task_manager_install_path" "$task_manager_staging_dir/Task Manager Desktop.previous.app"
+  fi
+  if mv "$task_manager_staging_dir/Task Manager Desktop.app" "$task_manager_install_path"; then
+    open "$task_manager_install_path"
+  else
+    test ! -d "$task_manager_staging_dir/Task Manager Desktop.previous.app" || mv "$task_manager_staging_dir/Task Manager Desktop.previous.app" "$task_manager_install_path"
+    exit 1
+  fi
   ```
 
 - 基础验证至少确认 `/Applications/Task Manager Desktop.app` 存在、启动的进程来自该安装包，并对本次修改涉及的功能做一次冒烟检查。任一步失败都要继续修复和重试，不能把未安装或未验证的修改报告为已完成。
