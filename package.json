@@ -7,10 +7,11 @@
   "scripts": {
     "rebuild:node": "npm rebuild better-sqlite3",
     "rebuild:electron": "electron-rebuild -v 39.8.10 -f -w better-sqlite3",
+    "generate:icon": "zsh scripts/generate-mac-icon.sh",
     "dev": "npm run rebuild:electron && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build": "vite build",
     "test": "npm run rebuild:node && vitest run",
-    "dist": "npm run build && npm run rebuild:electron && rm -rf release && USE_HARD_LINKS=false electron-builder --mac --dir --config.npmRebuild=false && npm run rebuild:node"
+    "dist": "npm run generate:icon && npm run build && npm run rebuild:electron && rm -rf release && USE_HARD_LINKS=false electron-builder --mac --dir --config.npmRebuild=false && npm run rebuild:node"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -44,6 +45,7 @@
       "output": "release"
     },
     "mac": {
+      "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",

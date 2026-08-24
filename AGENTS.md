@@ -2,6 +2,7 @@
 
 ## 本项目开发约定
 
+- 新增功能、修复 bug、调整配置或文档后，默认自动完成本节规定的全部收尾流程，无需等待用户再次提出“编译”“安装”或“启动”。只有用户明确要求暂停某一步时才停止。
 - 仓库内每次完成任何修改（包括代码、配置和文档）后，都必须依次完成：自测、提交、推送、停止旧进程、重新打包、安装到 `/Applications`、启动已安装版本和基础验证。不要只运行开发模式或 `release/` 中的临时产物。
 - 自测至少运行 `npm test`；根据修改范围补充相关检查。打包使用 `npm run dist`。
 - 安装时先停止 `Task Manager Desktop` 旧进程，再用本次生成的 `release/mac-*/Task Manager Desktop.app` 覆盖 `/Applications/Task Manager Desktop.app`，然后从 `/Applications` 启动。覆盖应用包不得删除或改动 Electron `userData` 目录中的本地数据。

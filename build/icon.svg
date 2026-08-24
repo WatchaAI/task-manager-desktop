@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="tile" x1="236" y1="144" x2="816" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4B8BFF"/>
+      <stop offset="0.48" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#123FAD"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="250" y1="156" x2="674" y2="718" gradientUnits="userSpaceOnUse">
+      <stop stop-color="white" stop-opacity="0.28"/>
+      <stop offset="0.55" stop-color="white" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="card" x1="344" y1="300" x2="688" y2="720" gradientUnits="userSpaceOnUse">
+      <stop stop-color="white" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#BFD7FF" stop-opacity="0.16"/>
+    </linearGradient>
+    <filter id="shadow" x="18" y="20" width="988" height="1004" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="28" stdDeviation="32" flood-color="#082866" flood-opacity="0.28"/>
+    </filter>
+    <filter id="markShadow" x="236" y="294" width="584" height="464" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#0C328D" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <rect x="76" y="70" width="872" height="872" rx="206" fill="url(#tile)"/>
+    <rect x="78" y="72" width="868" height="868" rx="204" stroke="white" stroke-opacity="0.16" stroke-width="4"/>
+    <path d="M114 306C162 163 276 94 432 82H734C817 82 882 129 923 199C794 159 649 168 529 214C386 269 280 371 209 504C150 614 123 721 111 824C88 771 76 711 76 642V276C76 229 89 190 114 156V306Z" fill="url(#shine)"/>
+  </g>
+
+  <g>
+    <rect x="300" y="281" width="454" height="118" rx="38" fill="url(#card)"/>
+    <rect x="300" y="452" width="454" height="118" rx="38" fill="url(#card)"/>
+    <rect x="300" y="623" width="454" height="118" rx="38" fill="url(#card)"/>
+    <circle cx="358" cy="340" r="15" fill="#D8E7FF" fill-opacity="0.72"/>
+    <circle cx="358" cy="511" r="15" fill="#D8E7FF" fill-opacity="0.72"/>
+    <circle cx="358" cy="682" r="15" fill="#D8E7FF" fill-opacity="0.72"/>
+  </g>
+
+  <path d="M282 518L422 654L742 348" stroke="white" stroke-width="82" stroke-linecap="round" stroke-linejoin="round" filter="url(#markShadow)"/>
+</svg>
