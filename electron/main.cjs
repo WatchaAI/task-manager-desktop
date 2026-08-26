@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const { createTaskStore } = require('./taskStore.cjs');
 const { registerTaskHandlers } = require('./taskIpc.cjs');
+const { registerLoginItemHandlers } = require('./loginItemIpc.cjs');
 const { createTaskDatabaseWatcher } = require('./taskDatabaseWatcher.cjs');
 const { createMacCalendarSync } = require('./macCalendar.cjs');
 
@@ -62,6 +63,7 @@ app.whenReady().then(() => {
     openExternal: (url) => shell.openExternal(url),
     syncTaskToCalendar: createMacCalendarSync()
   });
+  registerLoginItemHandlers(ipcMain, app);
   createWindow();
   dbWatcher = createTaskDatabaseWatcher(dbPath, notifyTasksChanged);
 

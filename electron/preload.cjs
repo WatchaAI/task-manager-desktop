@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('taskApi', {
   updateTask: (payload) => ipcRenderer.invoke('tasks:update', payload),
   deleteTask: (id) => ipcRenderer.invoke('tasks:delete', id),
   reorderTasks: (items) => ipcRenderer.invoke('tasks:reorder', items),
+  getOpenAtLogin: () => ipcRenderer.invoke('loginItem:get'),
+  setOpenAtLogin: (enabled) => ipcRenderer.invoke('loginItem:set', enabled),
   onTasksChanged: (callback) => {
     if (typeof callback !== 'function') {
       return () => {};

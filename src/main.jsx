@@ -35,11 +35,13 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Settings,
   Trash2,
   UserRound,
   X
 } from 'lucide-react';
 import { CalendarView } from './CalendarView.jsx';
+import { SettingsModal } from './SettingsModal.jsx';
 import { cleanAssociatedPeople, createEmptyTaskForm, updateTaskFormField } from './taskForm.js';
 import { upsertTaskById } from './taskList.js';
 import { CALENDAR_SCOPES, getCalendarTaskTypeId, transitionViewState } from './viewState.js';
@@ -188,6 +190,11 @@ function App() {
   const [newTypeName, setNewTypeName] = useState('');
   const [editingTypeId, setEditingTypeId] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [openAtLogin, setOpenAtLogin] = useState(false);
+  const [isLoginItemLoading, setIsLoginItemLoading] = useState(false);
+  const [isLoginItemSaving, setIsLoginItemSaving] = useState(false);
+  const [loginItemError, setLoginItemError] = useState('');
   const activeTypeIdRef = useRef(null);
   const viewStateRef = useRef(viewState);
 
@@ -313,6 +320,35 @@ function App() {
       ]);
     } finally {
       setIsRefreshing(false);
+    }
+  }
+
+  async function handleOpenSettings() {
+    setIsSettingsOpen(true);
+    setIsLoginItemLoading(true);
+    setLoginItemError('');
+    try {
+      setOpenAtLogin(await getTaskApi().getOpenAtLogin());
+    } catch (err) {
+      setLoginItemError(err.message || '无法读取系统登录项设置');
+    } finally {
+      setIsLoginItemLoading(false);
+    }
+  }
+
+  async function handleOpenAtLoginChange(enabled) {
+    setIsLoginItemSaving(true);
+    setLoginItemError('');
+    try {
+      const effectiveSetting = await getTaskApi().setOpenAtLogin(enabled);
+      setOpenAtLogin(effectiveSetting);
+      if (effectiveSetting !== enabled) {
+        setLoginItemError('系统未能更新登录项，请稍后重试。');
+      }
+    } catch (err) {
+      setLoginItemError(err.message || '无法更新系统登录项设置');
+    } finally {
+      setIsLoginItemSaving(false);
     }
   }
 
@@ -676,6 +712,15 @@ function App() {
             </button>
           </div>
           <button
+            className="icon-button settings-button"
+            type="button"
+            onClick={handleOpenSettings}
+            aria-label="打开设置"
+            title="设置"
+          >
+            <Settings size={18} />
+          </button>
+          <button
             className="secondary-button refresh-button"
             type="button"
             onClick={handleRefresh}
@@ -812,6 +857,17 @@ function App() {
           onCancel={() => setTaskPendingDelete(null)}
           onConfirm={handleConfirmDeleteTask}
           isDeleting={isDeletingTask}
+        />
+      )}
+
+      {isSettingsOpen && (
+        <SettingsModal
+          openAtLogin={openAtLogin}
+          isLoading={isLoginItemLoading}
+          isSaving={isLoginItemSaving}
+          error={loginItemError}
+          onOpenAtLoginChange={handleOpenAtLoginChange}
+          onClose={() => setIsSettingsOpen(false)}
         />
       )}
     </main>
