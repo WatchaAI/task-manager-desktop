@@ -21,19 +21,25 @@ describe('login item IPC handlers', () => {
   it('reads whether the app opens at login', async () => {
     const ipcMain = createFakeIpcMain();
     const electronApp = {
-      getLoginItemSettings: vi.fn(() => ({ openAtLogin: true }))
+      getLoginItemSettings: vi.fn(() => ({ openAtLogin: true, status: 'enabled' }))
     };
 
     registerLoginItemHandlers(ipcMain, electronApp);
 
-    expect(await ipcMain.invoke('loginItem:get')).toBe(true);
+    expect(await ipcMain.invoke('loginItem:get')).toEqual({
+      openAtLogin: true,
+      status: 'enabled'
+    });
   });
 
   it('updates the login item and returns the effective setting', async () => {
     const ipcMain = createFakeIpcMain();
     let openAtLogin = false;
     const electronApp = {
-      getLoginItemSettings: vi.fn(() => ({ openAtLogin })),
+      getLoginItemSettings: vi.fn(() => ({
+        openAtLogin,
+        status: openAtLogin ? 'enabled' : 'not-registered'
+      })),
       setLoginItemSettings: vi.fn((settings) => {
         openAtLogin = settings.openAtLogin;
       })
@@ -41,7 +47,10 @@ describe('login item IPC handlers', () => {
 
     registerLoginItemHandlers(ipcMain, electronApp);
 
-    expect(await ipcMain.invoke('loginItem:set', true)).toBe(true);
+    expect(await ipcMain.invoke('loginItem:set', true)).toEqual({
+      openAtLogin: true,
+      status: 'enabled'
+    });
     expect(electronApp.setLoginItemSettings).toHaveBeenCalledWith({ openAtLogin: true });
   });
 });

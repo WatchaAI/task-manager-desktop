@@ -31,6 +31,7 @@ describe('settings modal', () => {
       openAtLogin: true,
       isLoading: false,
       isSaving: false,
+      status: 'enabled',
       error: '',
       onOpenAtLoginChange,
       onClose: vi.fn()
@@ -43,5 +44,24 @@ describe('settings modal', () => {
     expect(openAtLoginSwitch.props.checked).toBe(true);
     openAtLoginSwitch.props.onChange({ target: { checked: false } });
     expect(onOpenAtLoginChange).toHaveBeenCalledWith(false);
+  });
+
+  it('explains when macOS requires approval for the login item', () => {
+    const view = SettingsModal({
+      openAtLogin: false,
+      isLoading: false,
+      isSaving: false,
+      status: 'requires-approval',
+      error: '',
+      onOpenAtLoginChange: vi.fn(),
+      onClose: vi.fn()
+    });
+    const approvalMessage = findElement(
+      view,
+      (element) => element.props?.className === 'settings-warning'
+    );
+
+    expect(approvalMessage).not.toBeNull();
+    expect(approvalMessage.props.children).toContain('系统设置');
   });
 });

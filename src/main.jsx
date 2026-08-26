@@ -194,6 +194,7 @@ function App() {
   const [openAtLogin, setOpenAtLogin] = useState(false);
   const [isLoginItemLoading, setIsLoginItemLoading] = useState(false);
   const [isLoginItemSaving, setIsLoginItemSaving] = useState(false);
+  const [loginItemStatus, setLoginItemStatus] = useState(null);
   const [loginItemError, setLoginItemError] = useState('');
   const activeTypeIdRef = useRef(null);
   const viewStateRef = useRef(viewState);
@@ -328,7 +329,9 @@ function App() {
     setIsLoginItemLoading(true);
     setLoginItemError('');
     try {
-      setOpenAtLogin(await getTaskApi().getOpenAtLogin());
+      const settings = await getTaskApi().getOpenAtLogin();
+      setOpenAtLogin(settings.openAtLogin);
+      setLoginItemStatus(settings.status);
     } catch (err) {
       setLoginItemError(err.message || '无法读取系统登录项设置');
     } finally {
@@ -340,9 +343,10 @@ function App() {
     setIsLoginItemSaving(true);
     setLoginItemError('');
     try {
-      const effectiveSetting = await getTaskApi().setOpenAtLogin(enabled);
-      setOpenAtLogin(effectiveSetting);
-      if (effectiveSetting !== enabled) {
+      const settings = await getTaskApi().setOpenAtLogin(enabled);
+      setOpenAtLogin(settings.openAtLogin);
+      setLoginItemStatus(settings.status);
+      if (settings.openAtLogin !== enabled && settings.status !== 'requires-approval') {
         setLoginItemError('系统未能更新登录项，请稍后重试。');
       }
     } catch (err) {
@@ -865,6 +869,7 @@ function App() {
           openAtLogin={openAtLogin}
           isLoading={isLoginItemLoading}
           isSaving={isLoginItemSaving}
+          status={loginItemStatus}
           error={loginItemError}
           onOpenAtLoginChange={handleOpenAtLoginChange}
           onClose={() => setIsSettingsOpen(false)}

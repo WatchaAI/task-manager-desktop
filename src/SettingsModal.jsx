@@ -5,6 +5,7 @@ export function SettingsModal({
   openAtLogin,
   isLoading,
   isSaving,
+  status,
   error,
   onOpenAtLoginChange,
   onClose
@@ -51,6 +52,12 @@ export function SettingsModal({
           <p className="settings-status" role="status">
             <LoaderCircle className="spin-icon" size={15} />
             {isSaving ? '正在更新系统登录项' : '正在读取系统登录项'}
+          </p>
+        )}
+        {status === 'requires-approval' && (
+          <p className="settings-warning" role="status">
+            已添加登录项，但 macOS 需要你批准。请前往“系统设置 → 通用 → 登录项与扩展”允许
+            Task Manager Desktop。
           </p>
         )}
         {error && (

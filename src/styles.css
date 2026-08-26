@@ -1201,12 +1201,10 @@ h1 {
   scrollbar-gutter: stable;
 }
 
-.task-details-modal {
-  width: min(580px, 100%);
-  max-height: calc(100vh - 48px);
+.task-details-modal,
+.settings-modal {
   display: grid;
   gap: 18px;
-  overflow-y: auto;
   padding: 22px;
   border: 1px solid #dfe5ee;
   border-radius: 8px;
@@ -1214,15 +1212,15 @@ h1 {
   box-shadow: 0 24px 70px rgba(18, 25, 38, 0.24);
 }
 
+.task-details-modal {
+  width: min(580px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
 .settings-modal {
   width: min(520px, 100%);
-  display: grid;
-  gap: 18px;
-  padding: 22px;
-  border: 1px solid #dfe5ee;
   border-radius: 10px;
-  background: #ffffff;
-  box-shadow: 0 24px 70px rgba(18, 25, 38, 0.24);
 }
 
 .settings-row {
@@ -1325,6 +1323,7 @@ h1 {
 }
 
 .settings-status,
+.settings-warning,
 .settings-error {
   display: flex;
   align-items: center;
@@ -1338,6 +1337,13 @@ h1 {
 .settings-status {
   background: #f1f5f9;
   color: #5d6b80;
+}
+
+.settings-warning {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  line-height: 1.55;
 }
 
 .settings-error {
