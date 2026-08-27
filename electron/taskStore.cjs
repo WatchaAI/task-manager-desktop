@@ -559,6 +559,7 @@ function createTaskStore(dbPath) {
     deleteTaskType,
     listPeople,
     listTasks,
+    getTask,
     createTask,
     updateTask,
     deleteTask,

@@ -129,4 +129,165 @@ describe('task IPC handlers', () => {
     });
     expect(store.createTask).toHaveBeenCalledTimes(1);
   });
+
+  it('stores one task when the same create request is triggered twice rapidly', async () => {
+    const ipcMain = createFakeIpcMain();
+    const createdTask = {
+      id: 11,
+      title: '明天复盘',
+      startTime: '2026-07-23T09:00',
+      endTime: '2026-07-23T10:00'
+    };
+    const store = {
+      createTask: vi.fn(() => createdTask)
+    };
+    const syncTaskToCalendar = vi.fn(() =>
+      Promise.resolve({ status: 'synced', calendarName: '工作', eventId: 'calendar-11' })
+    );
+    registerTaskHandlers(ipcMain, store, { syncTaskToCalendar });
+
+    const task = {
+      requestId: 'create-task-request-11',
+      title: '明天复盘',
+      startTime: '2026-07-23T09:00',
+      endTime: '2026-07-23T10:00'
+    };
+    const [first, second] = await Promise.all([
+      ipcMain.invoke('tasks:create', task),
+      ipcMain.invoke('tasks:create', task)
+    ]);
+
+    expect(first).toEqual(second);
+    expect(store.createTask).toHaveBeenCalledTimes(1);
+    expect(store.createTask).toHaveBeenCalledWith({
+      title: '明天复盘',
+      startTime: '2026-07-23T09:00',
+      endTime: '2026-07-23T10:00'
+    });
+    expect(syncTaskToCalendar).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a create request idempotent while a slow Calendar sync is still running', async () => {
+    vi.useFakeTimers();
+    try {
+      const ipcMain = createFakeIpcMain();
+      const createdTask = {
+        id: 15,
+        title: '同步较慢的会议',
+        startTime: '2026-07-23T09:00',
+        endTime: '2026-07-23T10:00'
+      };
+      let finishCalendarSync;
+      const calendarSyncRequest = new Promise((resolve) => {
+        finishCalendarSync = resolve;
+      });
+      const store = {
+        createTask: vi.fn(() => createdTask)
+      };
+      const syncTaskToCalendar = vi.fn(() => calendarSyncRequest);
+      registerTaskHandlers(ipcMain, store, { syncTaskToCalendar });
+      const task = { requestId: 'slow-calendar-request', title: '同步较慢的会议' };
+
+      const first = ipcMain.invoke('tasks:create', task);
+      await vi.advanceTimersByTimeAsync(5_000);
+      const second = ipcMain.invoke('tasks:create', task);
+      finishCalendarSync({ status: 'synced', eventId: 'calendar-15' });
+
+      await expect(Promise.all([first, second])).resolves.toEqual([
+        { ...createdTask, calendarSync: { status: 'synced', eventId: 'calendar-15' } },
+        { ...createdTask, calendarSync: { status: 'synced', eventId: 'calendar-15' } }
+      ]);
+      expect(store.createTask).toHaveBeenCalledTimes(1);
+      expect(syncTaskToCalendar).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('updates the linked Calendar event after a task is edited', async () => {
+    const ipcMain = createFakeIpcMain();
+    const updatedTask = {
+      id: 12,
+      title: '改期后的会议',
+      startTime: '2026-07-23T15:00',
+      endTime: '2026-07-23T16:00'
+    };
+    const previousTask = {
+      ...updatedTask,
+      title: '改期前的会议',
+      startTime: '2026-07-23T14:00',
+      endTime: '2026-07-23T15:00'
+    };
+    const store = {
+      getTask: vi.fn(() => previousTask),
+      updateTask: vi.fn(() => updatedTask)
+    };
+    const syncTaskToCalendar = vi.fn(() =>
+      Promise.resolve({ status: 'updated', calendarName: '工作', eventId: 'calendar-12' })
+    );
+    registerTaskHandlers(ipcMain, store, { syncTaskToCalendar });
+
+    const result = await ipcMain.invoke('tasks:update', updatedTask);
+
+    expect(syncTaskToCalendar).toHaveBeenCalledWith(updatedTask, { previousTask });
+    expect(result).toEqual({
+      ...updatedTask,
+      calendarSync: { status: 'updated', calendarName: '工作', eventId: 'calendar-12' }
+    });
+  });
+
+  it('removes the linked Calendar event when a task is deleted', async () => {
+    const ipcMain = createFakeIpcMain();
+    const store = {
+      getTask: vi.fn(() => ({
+        id: 13,
+        title: '取消的会议',
+        startTime: '2026-07-23T15:00',
+        endTime: '2026-07-23T16:00'
+      })),
+      deleteTask: vi.fn((id) => ({ ok: true, id }))
+    };
+    const deleteTaskFromCalendar = vi.fn(() =>
+      Promise.resolve({ status: 'deleted', calendarName: '工作', eventId: 'calendar-13' })
+    );
+    registerTaskHandlers(ipcMain, store, { deleteTaskFromCalendar });
+
+    const result = await ipcMain.invoke('tasks:delete', 13);
+
+    expect(deleteTaskFromCalendar).toHaveBeenCalledWith(13, {
+      id: 13,
+      title: '取消的会议',
+      startTime: '2026-07-23T15:00',
+      endTime: '2026-07-23T16:00'
+    });
+    expect(store.deleteTask).toHaveBeenCalledWith(13);
+    expect(result).toEqual({
+      ok: true,
+      id: 13,
+      calendarSync: { status: 'deleted', calendarName: '工作', eventId: 'calendar-13' }
+    });
+  });
+
+  it('syncs a task moved to canceled through drag and drop', async () => {
+    const ipcMain = createFakeIpcMain();
+    const canceledTask = {
+      id: 14,
+      title: '不再举行的会议',
+      status: 'canceled',
+      startTime: '2026-07-23T17:00',
+      endTime: '2026-07-23T18:00'
+    };
+    const store = {
+      getTask: vi.fn(() => ({ ...canceledTask, status: 'todo' })),
+      reorderTasks: vi.fn(() => [canceledTask])
+    };
+    const syncTaskToCalendar = vi.fn(() => Promise.resolve({ status: 'deleted' }));
+    registerTaskHandlers(ipcMain, store, { syncTaskToCalendar });
+
+    await ipcMain.invoke('tasks:reorder', [{ id: 14, status: 'canceled', sortOrder: 0 }]);
+
+    expect(syncTaskToCalendar).toHaveBeenCalledWith(canceledTask, {
+      previousTask: { ...canceledTask, status: 'todo' }
+    });
+  });
 });

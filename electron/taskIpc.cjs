@@ -1,18 +1,31 @@
 const { createMapUrl } = require('./mapUrl.cjs');
 
-function calendarFailureResult(error) {
+function calendarFailureResult(error, action = 'saved') {
   const detail = String(error?.message || error || '');
   const permissionDenied = /-1743|not authorized|not permitted|permission|权限/i.test(detail);
+  const actionLabel = action === 'deleted' ? '删除' : '保存';
   return {
     status: 'failed',
     reason: 'calendar-access-failed',
     message: permissionDenied
-      ? '事项已保存，但无法同步到 macOS 日历。请在“系统设置 → 隐私与安全性 → 自动化”中允许 Task Manager Desktop 控制“日历”。'
-      : '事项已保存，但同步到 macOS 日历失败。请确认系统“日历”中至少有一个可写日历，并检查自动化权限。'
+      ? `事项已${actionLabel}，但无法同步到 macOS 日历。请在“系统设置 → 隐私与安全性 → 自动化”中允许 Task Manager Desktop 控制“日历”。`
+      : `事项已${actionLabel}，但同步到 macOS 日历失败。请确认系统“日历”中至少有一个可写日历，并检查自动化权限。`
   };
 }
 
-function registerTaskHandlers(ipcMain, store, { openExternal, syncTaskToCalendar } = {}) {
+const CALENDAR_FIELDS = ['title', 'startTime', 'endTime', 'description', 'location', 'status'];
+
+function calendarDetailsChanged(previousTask, nextTask) {
+  return !previousTask || CALENDAR_FIELDS.some((field) => previousTask[field] !== nextTask[field]);
+}
+
+function registerTaskHandlers(
+  ipcMain,
+  store,
+  { openExternal, syncTaskToCalendar, deleteTaskFromCalendar } = {}
+) {
+  const recentCreateRequests = new Map();
+
   ipcMain.handle('taskTypes:list', () => store.listTaskTypes());
   ipcMain.handle('taskTypes:create', (_event, taskType) => store.createTaskType(taskType));
   ipcMain.handle('taskTypes:update', (_event, payload) => {
@@ -35,25 +48,107 @@ function registerTaskHandlers(ipcMain, store, { openExternal, syncTaskToCalendar
   });
   ipcMain.handle('tasks:list', (_event, typeId) => store.listTasks(typeId));
   ipcMain.handle('tasks:create', async (_event, task) => {
-    const createdTask = store.createTask(task);
-    if (typeof syncTaskToCalendar !== 'function') {
-      return createdTask;
+    const { requestId, ...taskInput } = task;
+    const requestKey = requestId
+      ? `request:${requestId}`
+      : `payload:${JSON.stringify(taskInput)}`;
+    const existingRequest = recentCreateRequests.get(requestKey);
+    if (existingRequest) {
+      return existingRequest;
+    }
+
+    const createRequest = (async () => {
+      const createdTask = store.createTask(taskInput);
+      if (typeof syncTaskToCalendar !== 'function') {
+        return createdTask;
+      }
+
+      try {
+        const calendarSync = await syncTaskToCalendar(createdTask);
+        return { ...createdTask, calendarSync };
+      } catch (error) {
+        console.error('[calendar:sync-failed]', error);
+        return { ...createdTask, calendarSync: calendarFailureResult(error) };
+      }
+    })();
+
+    recentCreateRequests.set(requestKey, createRequest);
+    void createRequest
+      .finally(() => {
+        const cleanupTimer = setTimeout(() => {
+          if (recentCreateRequests.get(requestKey) === createRequest) {
+            recentCreateRequests.delete(requestKey);
+          }
+        }, 1_500);
+        cleanupTimer.unref?.();
+      })
+      .catch(() => {});
+
+    return createRequest;
+  });
+  ipcMain.handle('tasks:update', async (_event, payload) => {
+    const { id, ...task } = payload;
+    const previousTask = typeof store.getTask === 'function' ? store.getTask(id) : undefined;
+    const updatedTask = store.updateTask(id, task);
+    if (typeof syncTaskToCalendar !== 'function' || !calendarDetailsChanged(previousTask, updatedTask)) {
+      return updatedTask;
     }
 
     try {
-      const calendarSync = await syncTaskToCalendar(createdTask);
-      return { ...createdTask, calendarSync };
+      const calendarSync = await syncTaskToCalendar(updatedTask, { previousTask });
+      return { ...updatedTask, calendarSync };
     } catch (error) {
-      console.error('[calendar:sync-failed]', error);
-      return { ...createdTask, calendarSync: calendarFailureResult(error) };
+      console.error('[calendar:update-failed]', error);
+      return { ...updatedTask, calendarSync: calendarFailureResult(error) };
     }
   });
-  ipcMain.handle('tasks:update', (_event, payload) => {
-    const { id, ...task } = payload;
-    return store.updateTask(id, task);
+  ipcMain.handle('tasks:delete', async (_event, id) => {
+    const previousTask = typeof store.getTask === 'function' ? store.getTask(id) : undefined;
+    const deletedTask = store.deleteTask(id);
+    if (typeof deleteTaskFromCalendar !== 'function') {
+      return deletedTask;
+    }
+
+    try {
+      const calendarSync = await deleteTaskFromCalendar(id, previousTask);
+      return { ...deletedTask, id, calendarSync };
+    } catch (error) {
+      console.error('[calendar:delete-failed]', error);
+      return { ...deletedTask, id, calendarSync: calendarFailureResult(error, 'deleted') };
+    }
   });
-  ipcMain.handle('tasks:delete', (_event, id) => store.deleteTask(id));
-  ipcMain.handle('tasks:reorder', (_event, items) => store.reorderTasks(items));
+  ipcMain.handle('tasks:reorder', async (_event, items) => {
+    const previousTasks = new Map(
+      typeof store.getTask === 'function'
+        ? items.map((item) => [item.id, store.getTask(item.id)])
+        : []
+    );
+    const reorderedTasks = store.reorderTasks(items);
+    if (typeof syncTaskToCalendar !== 'function') {
+      return reorderedTasks;
+    }
+
+    const tasksToSync = reorderedTasks.filter((task) => {
+      const previousTask = previousTasks.get(task.id);
+      return previousTask && previousTask.status !== task.status;
+    });
+    const calendarSyncResults = await Promise.all(
+      tasksToSync.map(async (task) => {
+        try {
+          const calendarSync = await syncTaskToCalendar(task, { previousTask: previousTasks.get(task.id) });
+          return [task.id, calendarSync];
+        } catch (error) {
+          console.error('[calendar:reorder-sync-failed]', error);
+          return [task.id, calendarFailureResult(error)];
+        }
+      })
+    );
+    const calendarSyncByTaskId = new Map(calendarSyncResults);
+    return reorderedTasks.map((task) => {
+      const calendarSync = calendarSyncByTaskId.get(task.id);
+      return calendarSync ? { ...task, calendarSync } : task;
+    });
+  });
 }
 
 module.exports = {

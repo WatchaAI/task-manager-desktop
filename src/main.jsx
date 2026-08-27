@@ -134,6 +134,13 @@ function createSubTaskId() {
   return `subtask-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function createTaskRequestId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return `task-request-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function normalizeSubTasksForForm(subTasks = []) {
   if (!Array.isArray(subTasks)) {
     return [];
@@ -217,6 +224,16 @@ function App() {
   const canceledTasks = grouped.canceled.length;
   const activeTasks = grouped.todo.length + grouped.in_progress.length;
   const activeType = taskTypes.find((type) => type.id === activeTypeId);
+
+  function showCalendarSyncResult(calendarSync) {
+    if (calendarSync?.status === 'failed') {
+      setCalendarSyncWarning(calendarSync.message);
+    } else if (calendarSync?.status === 'skipped' && calendarSync.reason === 'invalid-time-range') {
+      setCalendarSyncWarning('事项已保存，但没有同步到 macOS 日历：结束时间需要晚于开始时间。');
+    } else {
+      setCalendarSyncWarning('');
+    }
+  }
 
   async function loadBoardData({ preferredTypeId = activeTypeIdRef.current, showLoading = true } = {}) {
     try {
@@ -412,26 +429,24 @@ function App() {
       setError('');
       const typeId = modalTask?.typeId || activeTypeId;
       if (modalTask) {
-        const updated = await getTaskApi().updateTask({ id: modalTask.id, ...taskInput, typeId });
+        const updatedResult = await getTaskApi().updateTask({ id: modalTask.id, ...taskInput, typeId });
+        const { calendarSync, ...updated } = updatedResult;
         updateVisibleTaskCollections(updated);
+        showCalendarSyncResult(calendarSync);
       } else {
         const createdResult = await getTaskApi().createTask({ ...taskInput, typeId });
         const { calendarSync, ...created } = createdResult;
         updateVisibleTaskCollections(created);
-        if (calendarSync?.status === 'failed') {
-          setCalendarSyncWarning(calendarSync.message);
-        } else if (calendarSync?.status === 'skipped' && calendarSync.reason === 'invalid-time-range') {
-          setCalendarSyncWarning('事项已保存，但没有同步到 macOS 日历：结束时间需要晚于开始时间。');
-        } else {
-          setCalendarSyncWarning('');
-        }
+        showCalendarSyncResult(calendarSync);
       }
       setKnownPeople((current) => cleanAssociatedPeople([...(taskInput.associatedPeople || []), ...current]));
       setIsModalOpen(false);
       setModalTask(null);
       setDetailTask(null);
+      return true;
     } catch (err) {
       setError(err.message || '保存任务失败');
+      return false;
     }
   }
 
@@ -462,7 +477,8 @@ function App() {
     try {
       setIsDeletingTask(true);
       setError('');
-      await getTaskApi().deleteTask(taskPendingDelete.id);
+      const deletedResult = await getTaskApi().deleteTask(taskPendingDelete.id);
+      showCalendarSyncResult(deletedResult.calendarSync);
       setTasks((current) => normalizeSortOrders(current.filter((task) => task.id !== taskPendingDelete.id)));
       setAllTasks((current) => current.filter((task) => task.id !== taskPendingDelete.id));
       setTaskPendingDelete(null);
@@ -666,7 +682,7 @@ function App() {
 
     setTasks(normalized);
     try {
-      await getTaskApi().reorderTasks(
+      const reorderedTasks = await getTaskApi().reorderTasks(
         normalized.map((task) => ({
           id: task.id,
           typeId: task.typeId || activeTypeId,
@@ -674,6 +690,8 @@ function App() {
           sortOrder: task.sortOrder
         }))
       );
+      const calendarSync = reorderedTasks.find((task) => task.calendarSync)?.calendarSync;
+      showCalendarSyncResult(calendarSync);
     } catch (err) {
       setError(err.message || '保存排序失败');
       loadTasks(activeTypeId);
@@ -1122,7 +1140,13 @@ function TaskModal({ task, initialDate, knownPeople, onClose, onSave }) {
     subTasks: normalizeSubTasksForForm(task?.subTasks)
   }));
   const [formError, setFormError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [personInput, setPersonInput] = useState('');
+  const saveInFlightRef = useRef(false);
+  const createRequestIdRef = useRef(null);
+  if (!createRequestIdRef.current) {
+    createRequestIdRef.current = createTaskRequestId();
+  }
   const subTaskListRef = useRef(null);
   const subTaskInputRefs = useRef(new Map());
   const pendingSubTaskIdRef = useRef(null);
@@ -1182,14 +1206,20 @@ function TaskModal({ task, initialDate, knownPeople, onClose, onSave }) {
     }
   }
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
+    if (saveInFlightRef.current) {
+      return;
+    }
     if (!form.title.trim()) {
       setFormError('任务名称不能为空');
       return;
     }
     setFormError('');
-    onSave({
+    saveInFlightRef.current = true;
+    setIsSaving(true);
+    const saved = await onSave({
+      requestId: task ? undefined : createRequestIdRef.current,
       title: form.title.trim(),
       startTime: form.startTime || '',
       endTime: form.endTime || '',
@@ -1199,6 +1229,10 @@ function TaskModal({ task, initialDate, knownPeople, onClose, onSave }) {
       status: form.status || 'todo',
       subTasks: cleanSubTasksForSave(form.subTasks)
     });
+    if (!saved) {
+      saveInFlightRef.current = false;
+      setIsSaving(false);
+    }
   }
 
   const formSubTasks = normalizeSubTasksForForm(form.subTasks);
@@ -1229,7 +1263,7 @@ function TaskModal({ task, initialDate, knownPeople, onClose, onSave }) {
       <form className="task-modal" onSubmit={submit}>
         <div className="modal-header">
           <h2>{task ? '编辑任务' : '新增任务'}</h2>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="关闭">
+          <button className="icon-button" type="button" onClick={onClose} aria-label="关闭" disabled={isSaving}>
             <X size={18} />
           </button>
         </div>
@@ -1396,12 +1430,12 @@ function TaskModal({ task, initialDate, knownPeople, onClose, onSave }) {
         {formError && <p className="form-error">{formError}</p>}
 
         <div className="modal-actions">
-          <button className="secondary-button" type="button" onClick={onClose}>
+          <button className="secondary-button" type="button" onClick={onClose} disabled={isSaving}>
             取消
           </button>
-          <button className="primary-button" type="submit">
-            <Clock3 size={17} />
-            保存
+          <button className="primary-button" type="submit" disabled={isSaving}>
+            {isSaving ? <LoaderCircle size={17} className="spin-icon" /> : <Clock3 size={17} />}
+            {isSaving ? '保存中' : '保存'}
           </button>
         </div>
       </form>

@@ -4,7 +4,7 @@ const { createTaskStore } = require('./taskStore.cjs');
 const { registerTaskHandlers } = require('./taskIpc.cjs');
 const { registerLoginItemHandlers } = require('./loginItemIpc.cjs');
 const { createTaskDatabaseWatcher } = require('./taskDatabaseWatcher.cjs');
-const { createMacCalendarSync } = require('./macCalendar.cjs');
+const { createMacCalendarDelete, createMacCalendarSync } = require('./macCalendar.cjs');
 
 let mainWindow;
 let store;
@@ -61,7 +61,8 @@ app.whenReady().then(() => {
   store = createTaskStore(dbPath);
   registerTaskHandlers(ipcMain, store, {
     openExternal: (url) => shell.openExternal(url),
-    syncTaskToCalendar: createMacCalendarSync()
+    syncTaskToCalendar: createMacCalendarSync(),
+    deleteTaskFromCalendar: createMacCalendarDelete()
   });
   registerLoginItemHandlers(ipcMain, app);
   createWindow();
