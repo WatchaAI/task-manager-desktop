@@ -127,18 +127,19 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-function createSubTaskId() {
+function createClientId(fallbackPrefix) {
   if (window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
   }
-  return `subtask-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${fallbackPrefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createSubTaskId() {
+  return createClientId('subtask');
 }
 
 function createTaskRequestId() {
-  if (window.crypto?.randomUUID) {
-    return window.crypto.randomUUID();
-  }
-  return `task-request-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return createClientId('task-request');
 }
 
 function normalizeSubTasksForForm(subTasks = []) {
@@ -597,7 +598,8 @@ function App() {
 
     try {
       setError('');
-      await getTaskApi().deleteTaskType(type.id);
+      const deletedResult = await getTaskApi().deleteTaskType(type.id);
+      showCalendarSyncResult(deletedResult.calendarSync);
       const remainingTypes = taskTypes.filter((item) => item.id !== type.id);
       setTaskTypes(remainingTypes);
       if (editingTypeId === type.id) {

@@ -33,7 +33,35 @@ function registerTaskHandlers(
     return store.updateTaskType(id, taskType);
   });
   ipcMain.handle('taskTypes:reorder', (_event, items) => store.reorderTaskTypes(items));
-  ipcMain.handle('taskTypes:delete', (_event, id) => store.deleteTaskType(id));
+  ipcMain.handle('taskTypes:delete', async (_event, id) => {
+    const tasks =
+      typeof deleteTaskFromCalendar === 'function' && typeof store.listTasks === 'function'
+        ? store.listTasks(id)
+        : [];
+    const deletedTaskType = store.deleteTaskType(id);
+    if (typeof deleteTaskFromCalendar !== 'function' || tasks.length === 0) {
+      return deletedTaskType;
+    }
+
+    const calendarSyncResults = await Promise.all(
+      tasks.map(async (task) => {
+        try {
+          return await deleteTaskFromCalendar(task.id, task);
+        } catch (error) {
+          console.error('[calendar:task-type-delete-failed]', error);
+          return calendarFailureResult(error, 'deleted');
+        }
+      })
+    );
+    const failedSync = calendarSyncResults.find((result) => result.status === 'failed');
+    return {
+      ...deletedTaskType,
+      calendarSync: failedSync || {
+        status: 'deleted',
+        count: calendarSyncResults.filter((result) => result.status === 'deleted').length
+      }
+    };
+  });
   ipcMain.handle('people:list', () => store.listPeople());
   ipcMain.handle('maps:open', async (_event, location) => {
     const url = createMapUrl(location);

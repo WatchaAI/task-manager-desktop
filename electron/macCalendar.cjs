@@ -3,19 +3,19 @@ const { execFile: defaultExecFile } = require('node:child_process');
 const CALENDAR_EVENT_URL_PREFIX = 'task-manager-desktop://task/';
 
 const CALENDAR_EVENT_LOOKUP_SCRIPT = String.raw`
-function eventUrl(event) {
-  try {
-    return String(event.url() || '');
-  } catch (_error) {
-    return '';
-  }
-}
-
 function eventTime(event, property) {
   try {
     return event[property]().getTime();
   } catch (_error) {
     return NaN;
+  }
+}
+
+function eventText(event, property) {
+  try {
+    return String(event[property]() || '');
+  } catch (_error) {
+    return '';
   }
 }
 
@@ -34,19 +34,20 @@ function findLinkedEvent(calendars, payload) {
     return { marker };
   }
 
-  for (const calendar of calendars) {
-    const candidates = calendar.events.whose({ summary: previousTask.title })();
-    for (const event of candidates) {
-      const existingUrl = eventUrl(event);
-      if (
-        existingUrl.startsWith('${CALENDAR_EVENT_URL_PREFIX}') ||
-        eventTime(event, 'startDate') !== previousTask.startTimeMs ||
-        eventTime(event, 'endDate') !== previousTask.endTimeMs
-      ) {
-        continue;
-      }
-      return { calendar, event, marker };
+  const legacyCalendar = calendars[0];
+  const candidates = legacyCalendar.events.whose({ summary: previousTask.title })();
+  for (const event of candidates) {
+    const existingUrl = eventText(event, 'url');
+    if (
+      existingUrl.startsWith('${CALENDAR_EVENT_URL_PREFIX}') ||
+      eventTime(event, 'startDate') !== previousTask.startTimeMs ||
+      eventTime(event, 'endDate') !== previousTask.endTimeMs ||
+      eventText(event, 'description') !== previousTask.description ||
+      eventText(event, 'location') !== previousTask.location
+    ) {
+      continue;
     }
+    return { calendar: legacyCalendar, event, marker };
   }
 
   return { marker };
@@ -180,7 +181,9 @@ function createPreviousTaskLookup(task) {
   return {
     title: task.title,
     startTimeMs: timeRange.startTimeMs,
-    endTimeMs: timeRange.endTimeMs
+    endTimeMs: timeRange.endTimeMs,
+    description: task.description || '',
+    location: task.location || ''
   };
 }
 

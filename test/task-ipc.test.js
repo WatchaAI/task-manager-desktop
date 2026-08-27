@@ -290,4 +290,29 @@ describe('task IPC handlers', () => {
       previousTask: { ...canceledTask, status: 'todo' }
     });
   });
+
+  it('removes linked Calendar events when deleting a task type with its tasks', async () => {
+    const ipcMain = createFakeIpcMain();
+    const tasks = [
+      { id: 16, typeId: 4, title: '类型内任务一', startTime: '2026-07-24T09:00', endTime: '2026-07-24T10:00' },
+      { id: 17, typeId: 4, title: '类型内任务二', startTime: '2026-07-24T11:00', endTime: '2026-07-24T12:00' }
+    ];
+    const store = {
+      listTasks: vi.fn(() => tasks),
+      deleteTaskType: vi.fn(() => ({ ok: true }))
+    };
+    const deleteTaskFromCalendar = vi.fn(() => Promise.resolve({ status: 'deleted' }));
+    registerTaskHandlers(ipcMain, store, { deleteTaskFromCalendar });
+
+    const result = await ipcMain.invoke('taskTypes:delete', 4);
+
+    expect(deleteTaskFromCalendar.mock.calls).toEqual([
+      [16, tasks[0]],
+      [17, tasks[1]]
+    ]);
+    expect(result).toEqual({
+      ok: true,
+      calendarSync: { status: 'deleted', count: 2 }
+    });
+  });
 });

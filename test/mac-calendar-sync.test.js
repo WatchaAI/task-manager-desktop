@@ -214,6 +214,39 @@ describe('macOS calendar sync', () => {
     });
   });
 
+  it('does not adopt an unrelated legacy event with the same title and time', async () => {
+    const { events, execFile } = createCalendarHarness([
+      {
+        uid: 'personal-event',
+        url: '',
+        summary: '同名会议',
+        startDate: new Date('2026-07-22T10:00'),
+        endDate: new Date('2026-07-22T11:00'),
+        description: '私人安排',
+        location: '家里'
+      }
+    ]);
+    const syncTaskToCalendar = createMacCalendarSync({ platform: 'darwin', execFile });
+    const previousTask = {
+      id: 50,
+      title: '同名会议',
+      startTime: '2026-07-22T10:00',
+      endTime: '2026-07-22T11:00',
+      description: '工作安排',
+      location: '公司'
+    };
+
+    const result = await syncTaskToCalendar(
+      { ...previousTask, startTime: '2026-07-22T13:00', endTime: '2026-07-22T14:00' },
+      { previousTask }
+    );
+
+    expect(result).toEqual({ status: 'synced', calendarName: '工作', eventId: 'generated-1' });
+    expect(events).toHaveLength(2);
+    expect(events[0].values).toMatchObject({ description: '私人安排', location: '家里', url: '' });
+    expect(events[1].values.url).toBe('task-manager-desktop://task/50');
+  });
+
   it('deletes the linked event when an existing task is canceled', async () => {
     const execFile = vi.fn((_file, _args, _options, callback) => {
       callback(null, JSON.stringify({ calendarName: '工作', eventId: 'event-47' }), '');
