@@ -16,4 +16,13 @@ describe('task card status colors', () => {
     expect(styles).toMatch(/\.task-card-done\s*\{[^}]*--task-bg:/s);
     expect(styles).toMatch(/\.task-card-canceled\s*\{[^}]*--task-bg:/s);
   });
+
+  it('de-emphasizes completed tasks with a light gray palette', () => {
+    expect(styles).toMatch(
+      /\.task-card-done\s*\{[^}]*--task-accent: #c5cad1;[^}]*--task-bg: [^;]*#f5f6f7[^;]*;[^}]*opacity: 0\.78;/s
+    );
+    expect(styles).toMatch(
+      /\.calendar-task-done,\s*\.details-status-done\s*\{[^}]*--status-bg: #f7f8fa;[^}]*--status-text: #8a93a0;/s
+    );
+  });
 });

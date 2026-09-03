@@ -791,9 +791,9 @@ h1 {
 
 .calendar-task-done,
 .details-status-done {
-  --status-bg: #ecf9f0;
-  --status-border: #cdebd6;
-  --status-text: #237441;
+  --status-bg: #f7f8fa;
+  --status-border: #e6e8ec;
+  --status-text: #8a93a0;
 }
 
 .calendar-task-canceled,
@@ -994,10 +994,16 @@ h1 {
 }
 
 .task-card-done {
-  --task-accent: #22c55e;
-  --task-bg: linear-gradient(135deg, #f2fbf5 0%, #ffffff 76%);
-  --task-bg-hover: linear-gradient(135deg, #e6f8ec 0%, #ffffff 76%);
-  --task-border: #ccebd5;
+  --task-accent: #c5cad1;
+  --task-bg: linear-gradient(135deg, #f5f6f7 0%, #fafafa 76%);
+  --task-bg-hover: linear-gradient(135deg, #f0f1f3 0%, #f8f9fa 76%);
+  --task-border: #e4e6e9;
+  opacity: 0.78;
+  box-shadow: 0 4px 12px rgba(33, 43, 64, 0.025);
+}
+
+.task-card-done:hover {
+  box-shadow: 0 6px 16px rgba(33, 43, 64, 0.045);
 }
 
 .task-card-canceled {
