@@ -110,4 +110,30 @@ describe('settings modal', () => {
     expect(onSyncCloudNow).toHaveBeenCalledTimes(1);
     expect(syncedStatus).not.toBeNull();
   });
+
+  it('keeps manual retry available after an iCloud sync error', () => {
+    const view = SettingsModal({
+      openAtLogin: false,
+      isLoading: false,
+      isSaving: false,
+      status: 'not-registered',
+      error: '',
+      cloudSyncState: {
+        enabled: true,
+        available: true,
+        status: 'error',
+        error: 'iCloud 文件尚未下载完整'
+      },
+      onOpenAtLoginChange: vi.fn(),
+      onSyncCloudNow: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    const retryButton = findElement(
+      view,
+      (element) => element.props?.['aria-label'] === '立即同步 iCloud'
+    );
+    expect(retryButton).not.toBeNull();
+    expect(retryButton.props.disabled).toBe(false);
+  });
 });

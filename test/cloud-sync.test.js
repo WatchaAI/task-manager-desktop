@@ -107,4 +107,78 @@ describe('iCloud data sync', () => {
       '日常'
     ]);
   });
+
+  it('does not resurrect task types independently created with the same name', async () => {
+    fs.mkdirSync(path.join(tempDir, 'iCloud Drive'), { recursive: true });
+    const macA = createDevice('mac-a');
+    const macB = createDevice('mac-b');
+    macA.store.createTaskType({ name: '客户项目' });
+    macB.store.createTaskType({ name: '客户项目' });
+
+    await macA.service.setEnabled(true);
+    await macB.service.setEnabled(true);
+    await macA.service.syncNow();
+    const mergedTypeOnA = macA.store.listTaskTypes().find((taskType) => taskType.name === '客户项目');
+    const typeOnB = macB.store.listTaskTypes().find((taskType) => taskType.name === '客户项目');
+    expect(typeOnB.syncId).toBe(mergedTypeOnA.syncId);
+
+    vi.setSystemTime(new Date('2030-01-01T09:00:00.000Z'));
+    macA.store.deleteTaskType(mergedTypeOnA.id);
+    await macA.service.syncNow();
+    await macB.service.syncNow();
+    await macA.service.syncNow();
+
+    expect(macA.store.listTaskTypes().map((taskType) => taskType.name)).not.toContain('客户项目');
+    expect(macB.store.listTaskTypes().map((taskType) => taskType.name)).not.toContain('客户项目');
+  });
+
+  it('automatically resumes after iCloud Drive becomes available again', async () => {
+    const cloudDrivePath = path.join(tempDir, 'iCloud Drive');
+    fs.mkdirSync(cloudDrivePath, { recursive: true });
+    const mac = createDevice('mac-a');
+    await mac.service.setEnabled(true);
+    mac.service.close();
+    fs.rmSync(cloudDrivePath, { recursive: true, force: true });
+
+    const restartedService = createCloudSync({
+      store: mac.store,
+      userDataPath: path.join(tempDir, 'mac-a'),
+      cloudDrivePath,
+      deviceId: 'mac-a',
+      deviceName: 'mac-a',
+      pollIntervalMs: 100,
+      watch: false
+    });
+    services.push(restartedService);
+    await restartedService.start();
+    expect(restartedService.getState().status).toBe('unavailable');
+
+    fs.mkdirSync(cloudDrivePath, { recursive: true });
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(restartedService.getState()).toMatchObject({
+      enabled: true,
+      available: true,
+      status: 'synced'
+    });
+  });
+
+  it('reports an error instead of claiming success when a remote snapshot is unreadable', async () => {
+    const devicesPath = path.join(
+      tempDir,
+      'iCloud Drive',
+      'Task Manager Desktop',
+      'Sync',
+      'devices'
+    );
+    fs.mkdirSync(devicesPath, { recursive: true });
+    fs.writeFileSync(path.join(devicesPath, 'another-device.json'), '{not valid json', 'utf8');
+    const mac = createDevice('mac-a');
+
+    const state = await mac.service.setEnabled(true);
+
+    expect(state.status).toBe('error');
+    expect(state.lastSyncedAt).toBeNull();
+    expect(state.error).toContain('无法读取');
+  });
 });

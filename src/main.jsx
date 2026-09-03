@@ -405,7 +405,7 @@ function App() {
     try {
       const nextState = await getTaskApi().setCloudSyncEnabled(enabled);
       setCloudSyncState(nextState);
-      if (nextState.enabled !== enabled && enabled) {
+      if (nextState.enabled !== enabled && enabled && nextState.status !== 'unavailable') {
         setCloudSyncError(nextState.error || '无法开启 iCloud 同步');
       }
     } catch (err) {

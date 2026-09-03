@@ -76,12 +76,14 @@ export function SettingsModal({
               {cloudSyncState.status === 'syncing' ? '正在与 iCloud 同步' : '正在检查 iCloud 状态'}
             </p>
           )}
-          {cloudSyncState.enabled && cloudSyncState.status === 'synced' && (
+          {cloudSyncState.enabled && !['checking', 'syncing'].includes(cloudSyncState.status) && (
             <div className="settings-cloud-footer">
-              <p className="settings-cloud-success" role="status">
-                <CheckCircle2 size={15} />
-                已同步{lastSyncedAt ? ` · ${lastSyncedAt}` : ''}
-              </p>
+              {cloudSyncState.status === 'synced' && (
+                <p className="settings-cloud-success" role="status">
+                  <CheckCircle2 size={15} />
+                  已同步{lastSyncedAt ? ` · ${lastSyncedAt}` : ''}
+                </p>
+              )}
               <button
                 className="settings-sync-button"
                 type="button"
@@ -90,7 +92,7 @@ export function SettingsModal({
                 onClick={onSyncCloudNow}
               >
                 <RefreshCw size={14} />
-                立即同步
+                {['error', 'unavailable'].includes(cloudSyncState.status) ? '重试同步' : '立即同步'}
               </button>
             </div>
           )}

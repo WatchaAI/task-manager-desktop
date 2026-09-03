@@ -18,7 +18,8 @@ function snapshotData(snapshot) {
     taskTypes: Array.isArray(snapshot?.taskTypes) ? snapshot.taskTypes : [],
     tasks: Array.isArray(snapshot?.tasks) ? snapshot.tasks : [],
     people: Array.isArray(snapshot?.people) ? snapshot.people : [],
-    tombstones: Array.isArray(snapshot?.tombstones) ? snapshot.tombstones : []
+    tombstones: Array.isArray(snapshot?.tombstones) ? snapshot.tombstones : [],
+    aliases: Array.isArray(snapshot?.aliases) ? snapshot.aliases : []
   };
 }
 
@@ -111,19 +112,33 @@ function createCloudSync({
     let entries;
     try {
       entries = fsModule.readdirSync(devicesPath, { withFileTypes: true });
-    } catch {
-      return [];
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        return [];
+      }
+      throw error;
+    }
+
+    if (entries.some((entry) => entry.isFile() && entry.name.includes('.json') && entry.name.endsWith('.icloud'))) {
+      throw new Error('同步快照仍在从 iCloud 下载，请稍后重试。');
     }
 
     return entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .filter(
+        (entry) => entry.isFile() && entry.name.endsWith('.json') && entry.name !== deviceFileName
+      )
       .sort((left, right) => left.name.localeCompare(right.name))
-      .flatMap((entry) => {
+      .map((entry) => {
         try {
           const snapshot = JSON.parse(fsModule.readFileSync(path.join(devicesPath, entry.name), 'utf8'));
-          return snapshot && typeof snapshot === 'object' ? [snapshot] : [];
-        } catch {
-          return [];
+          if (!snapshot || typeof snapshot !== 'object') {
+            throw new Error('Invalid snapshot');
+          }
+          return snapshot;
+        } catch (error) {
+          const snapshotError = new Error('无法读取某台设备的同步快照，请确认 iCloud 文件已下载完整。');
+          snapshotError.cause = error;
+          throw snapshotError;
         }
       });
   }
@@ -167,6 +182,7 @@ function createCloudSync({
       fsModule.mkdirSync(devicesPath, { recursive: true });
       const mergeResult = store.mergeSyncSnapshots(readCloudSnapshots());
       writeOwnSnapshotIfChanged();
+      ensureCloudWatcher();
       const lastSyncedAt = new Date().toISOString();
       preferences = { ...preferences, enabled: true, lastSyncedAt };
       savePreferences();
@@ -203,9 +219,8 @@ function createCloudSync({
     debounceTimer.unref?.();
   }
 
-  function startWatching() {
-    stopWatching();
-    if (!watch || !state.enabled || !isCloudDriveAvailable()) {
+  function ensureCloudWatcher() {
+    if (!watch || watcher || !state.enabled || !isCloudDriveAvailable()) {
       return;
     }
 
@@ -215,12 +230,31 @@ function createCloudSync({
           scheduleSync();
         }
       });
+      const activeWatcher = watcher;
+      activeWatcher.on?.('error', () => {
+        activeWatcher.close?.();
+        if (watcher === activeWatcher) {
+          watcher = null;
+        }
+        scheduleSync();
+      });
     } catch {
       watcher = null;
     }
+  }
+
+  function startWatching() {
+    stopWatching();
+    if (!state.enabled) {
+      return;
+    }
+
+    ensureCloudWatcher();
 
     if (pollIntervalMs > 0) {
-      pollTimer = setInterval(scheduleSync, pollIntervalMs);
+      pollTimer = setInterval(() => {
+        void syncNow();
+      }, pollIntervalMs);
       pollTimer.unref?.();
     }
   }
@@ -246,10 +280,10 @@ function createCloudSync({
     }
     if (!state.available) {
       setState({ status: 'unavailable', error: '未检测到 iCloud Drive，请先在系统设置中开启。' });
+      startWatching();
       return getState();
     }
 
-    fsModule.mkdirSync(devicesPath, { recursive: true });
     startWatching();
     return syncNow();
   }
@@ -282,7 +316,6 @@ function createCloudSync({
     preferences = { ...preferences, enabled: true };
     savePreferences();
     setState({ enabled: true, available: true, status: 'checking', error: '' });
-    fsModule.mkdirSync(devicesPath, { recursive: true });
     startWatching();
     return syncNow();
   }

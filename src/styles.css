@@ -1361,6 +1361,7 @@ h1 {
 }
 
 .settings-sync-button {
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
