@@ -64,4 +64,50 @@ describe('settings modal', () => {
     expect(approvalMessage).not.toBeNull();
     expect(approvalMessage.props.children).toContain('系统设置');
   });
+
+  it('shows iCloud sync state and lets the user sync or turn it off', () => {
+    const onCloudSyncEnabledChange = vi.fn();
+    const onSyncCloudNow = vi.fn();
+    const view = SettingsModal({
+      openAtLogin: false,
+      isLoading: false,
+      isSaving: false,
+      status: 'not-registered',
+      error: '',
+      cloudSyncState: {
+        enabled: true,
+        available: true,
+        status: 'synced',
+        lastSyncedAt: '2030-01-01T09:30:00.000Z',
+        folderName: 'iCloud Drive/Task Manager Desktop',
+        error: ''
+      },
+      isCloudSyncLoading: false,
+      isCloudSyncSaving: false,
+      cloudSyncError: '',
+      onOpenAtLoginChange: vi.fn(),
+      onCloudSyncEnabledChange,
+      onSyncCloudNow,
+      onClose: vi.fn()
+    });
+    const cloudSwitch = findElement(
+      view,
+      (element) => element.props?.['aria-label'] === 'iCloud 多设备同步'
+    );
+    const syncNowButton = findElement(
+      view,
+      (element) => element.props?.['aria-label'] === '立即同步 iCloud'
+    );
+    const syncedStatus = findElement(
+      view,
+      (element) => element.props?.className === 'settings-cloud-success'
+    );
+
+    expect(cloudSwitch.props.checked).toBe(true);
+    cloudSwitch.props.onChange({ target: { checked: false } });
+    expect(onCloudSyncEnabledChange).toHaveBeenCalledWith(false);
+    syncNowButton.props.onClick();
+    expect(onSyncCloudNow).toHaveBeenCalledTimes(1);
+    expect(syncedStatus).not.toBeNull();
+  });
 });

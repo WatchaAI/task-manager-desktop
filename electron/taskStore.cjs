@@ -1,15 +1,31 @@
 const Database = require('better-sqlite3');
+const { createHash, randomUUID } = require('node:crypto');
 const { cleanAssociatedPeople } = require('./people.cjs');
 
 const TASK_STATUS_ORDER = ['todo', 'in_progress', 'done', 'canceled'];
 const STATUSES = new Set(TASK_STATUS_ORDER);
 const DEFAULT_TASK_TYPES = ['工作', '学习', '日常'];
+const DEFAULT_TASK_TYPE_UPDATED_AT = '2000-01-01T00:00:00.000Z';
+const SYNC_SCHEMA_VERSION = 1;
+
+function createSyncId(prefix) {
+  return `${prefix}-${randomUUID()}`;
+}
+
+function createMigratedTaskTypeSyncId(name, id) {
+  if (Number(id) >= 1 && Number(id) <= DEFAULT_TASK_TYPES.length) {
+    return `task-type-default-${id}`;
+  }
+  const digest = createHash('sha256').update(String(name).trim()).digest('hex').slice(0, 32);
+  return `task-type-${digest}`;
+}
 
 function createTasksTableSql(tableName, ifNotExists = false) {
   const statusValues = TASK_STATUS_ORDER.map((status) => `'${status}'`).join(', ');
   return `
     CREATE TABLE ${ifNotExists ? 'IF NOT EXISTS ' : ''}${tableName} (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sync_id TEXT NOT NULL,
       type_id INTEGER NOT NULL DEFAULT 1,
       title TEXT NOT NULL,
       start_time TEXT NOT NULL DEFAULT '',
@@ -35,6 +51,7 @@ function createTaskStore(dbPath) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS task_types (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sync_id TEXT NOT NULL,
       name TEXT NOT NULL UNIQUE,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
@@ -48,12 +65,22 @@ function createTaskStore(dbPath) {
       last_used_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS sync_tombstones (
+      entity_type TEXT NOT NULL CHECK(entity_type IN ('taskType', 'task')),
+      sync_id TEXT NOT NULL,
+      deleted_at TEXT NOT NULL,
+      PRIMARY KEY (entity_type, sync_id)
+    );
+
     ${createTasksTableSql('tasks', true)}
   `);
 
-  seedDefaultTaskTypes();
+  const taskTypeColumns = db.prepare('PRAGMA table_info(task_types)').all();
+  if (!taskTypeColumns.some((column) => column.name === 'sync_id')) {
+    db.prepare('ALTER TABLE task_types ADD COLUMN sync_id TEXT').run();
+  }
 
-  const columns = db.prepare('PRAGMA table_info(tasks)').all();
+  let columns = db.prepare('PRAGMA table_info(tasks)').all();
   if (!columns.some((column) => column.name === 'sub_tasks')) {
     db.prepare("ALTER TABLE tasks ADD COLUMN sub_tasks TEXT NOT NULL DEFAULT '[]'").run();
   }
@@ -66,6 +93,12 @@ function createTaskStore(dbPath) {
   if (!columns.some((column) => column.name === 'associated_people')) {
     db.prepare("ALTER TABLE tasks ADD COLUMN associated_people TEXT NOT NULL DEFAULT '[]'").run();
   }
+  if (!columns.some((column) => column.name === 'sync_id')) {
+    db.prepare('ALTER TABLE tasks ADD COLUMN sync_id TEXT').run();
+  }
+
+  seedDefaultTaskTypes();
+  assignMissingSyncIds();
 
   const tasksTableSql = db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tasks'")
@@ -79,6 +112,7 @@ function createTaskStore(dbPath) {
 
         INSERT INTO tasks (
           id,
+          sync_id,
           type_id,
           title,
           start_time,
@@ -94,6 +128,7 @@ function createTaskStore(dbPath) {
         )
         SELECT
           id,
+          sync_id,
           type_id,
           title,
           start_time,
@@ -117,11 +152,17 @@ function createTaskStore(dbPath) {
     CREATE INDEX IF NOT EXISTS idx_task_types_sort
       ON task_types (sort_order, created_at);
 
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_task_types_sync_id
+      ON task_types (sync_id);
+
     CREATE INDEX IF NOT EXISTS idx_tasks_status_sort
       ON tasks (status, sort_order, created_at);
 
     CREATE INDEX IF NOT EXISTS idx_tasks_type_status_sort
       ON tasks (type_id, status, sort_order, created_at);
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_sync_id
+      ON tasks (sync_id);
   `);
 
   function seedDefaultTaskTypes() {
@@ -133,13 +174,32 @@ function createTaskStore(dbPath) {
     const now = new Date().toISOString();
     const statement = db.prepare(
       `
-      INSERT INTO task_types (name, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO task_types (sync_id, name, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
     `
     );
     DEFAULT_TASK_TYPES.forEach((name, index) => {
-      statement.run(name, index, now, now);
+      statement.run(
+        `task-type-default-${index + 1}`,
+        name,
+        index,
+        now,
+        DEFAULT_TASK_TYPE_UPDATED_AT
+      );
     });
+  }
+
+  function assignMissingSyncIds() {
+    const updateTaskType = db.prepare('UPDATE task_types SET sync_id = ? WHERE id = ?');
+    const updateTask = db.prepare('UPDATE tasks SET sync_id = ? WHERE id = ?');
+    db.transaction(() => {
+      for (const row of db.prepare("SELECT id, name FROM task_types WHERE sync_id IS NULL OR sync_id = ''").all()) {
+        updateTaskType.run(createMigratedTaskTypeSyncId(row.name, row.id), row.id);
+      }
+      for (const row of db.prepare("SELECT id FROM tasks WHERE sync_id IS NULL OR sync_id = ''").all()) {
+        updateTask.run(createSyncId('task'), row.id);
+      }
+    })();
   }
 
   function createSubTaskId(index) {
@@ -185,7 +245,9 @@ function createTaskStore(dbPath) {
     const statement = db.prepare(`
       INSERT INTO people (name, created_at, last_used_at)
       VALUES (?, ?, ?)
-      ON CONFLICT(name) DO UPDATE SET last_used_at = excluded.last_used_at
+      ON CONFLICT(name) DO UPDATE SET
+        created_at = MIN(people.created_at, excluded.created_at),
+        last_used_at = MAX(people.last_used_at, excluded.last_used_at)
     `);
     for (const name of people) {
       statement.run(name, now, now);
@@ -207,6 +269,7 @@ function createTaskStore(dbPath) {
   function rowToTask(row) {
     return {
       id: row.id,
+      syncId: row.sync_id,
       typeId: row.type_id,
       title: row.title,
       startTime: row.start_time,
@@ -225,6 +288,7 @@ function createTaskStore(dbPath) {
   function rowToTaskType(row) {
     return {
       id: row.id,
+      syncId: row.sync_id,
       name: row.name,
       sortOrder: row.sort_order,
       createdAt: row.created_at,
@@ -310,11 +374,11 @@ function createTaskStore(dbPath) {
     const result = db
       .prepare(
         `
-        INSERT INTO task_types (name, sort_order, created_at, updated_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO task_types (sync_id, name, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
       `
       )
-      .run(taskType.name, nextTaskTypeSortOrder(), now, now);
+      .run(createSyncId('task-type'), taskType.name, nextTaskTypeSortOrder(), now, now);
 
     return rowToTaskType(db.prepare('SELECT * FROM task_types WHERE id = ?').get(result.lastInsertRowid));
   }
@@ -379,8 +443,21 @@ function createTaskStore(dbPath) {
       throw new Error('Cannot delete the last task type');
     }
 
-    db.prepare('DELETE FROM tasks WHERE type_id = ?').run(id);
-    db.prepare('DELETE FROM task_types WHERE id = ?').run(id);
+    const now = new Date().toISOString();
+    const tasksToDelete = db.prepare('SELECT sync_id FROM tasks WHERE type_id = ?').all(id);
+    const addTombstone = db.prepare(`
+      INSERT INTO sync_tombstones (entity_type, sync_id, deleted_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(entity_type, sync_id) DO UPDATE SET deleted_at = excluded.deleted_at
+    `);
+    db.transaction(() => {
+      for (const task of tasksToDelete) {
+        addTombstone.run('task', task.sync_id, now);
+      }
+      addTombstone.run('taskType', existing.syncId, now);
+      db.prepare('DELETE FROM tasks WHERE type_id = ?').run(id);
+      db.prepare('DELETE FROM task_types WHERE id = ?').run(id);
+    })();
     return { ok: true };
   }
 
@@ -428,6 +505,7 @@ function createTaskStore(dbPath) {
       .prepare(
         `
         INSERT INTO tasks (
+          sync_id,
           type_id,
           title,
           start_time,
@@ -441,10 +519,11 @@ function createTaskStore(dbPath) {
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
       )
       .run(
+        createSyncId('task'),
         task.typeId,
         task.title,
         task.startTime,
@@ -512,7 +591,20 @@ function createTaskStore(dbPath) {
   }
 
   function deleteTask(id) {
-    db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+    const existing = getTask(id);
+    if (!existing) {
+      return { ok: true };
+    }
+
+    const now = new Date().toISOString();
+    db.transaction(() => {
+      db.prepare(`
+        INSERT INTO sync_tombstones (entity_type, sync_id, deleted_at)
+        VALUES ('task', ?, ?)
+        ON CONFLICT(entity_type, sync_id) DO UPDATE SET deleted_at = excluded.deleted_at
+      `).run(existing.syncId, now);
+      db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+    })();
     return { ok: true };
   }
 
@@ -546,6 +638,330 @@ function createTaskStore(dbPath) {
     return listTasks();
   }
 
+  function exportSyncSnapshot() {
+    const taskTypes = listTaskTypes().map(({ id, ...taskType }) => taskType);
+    const typeSyncIds = new Map(listTaskTypes().map((taskType) => [taskType.id, taskType.syncId]));
+    const tasks = listTasks().map(({ id, typeId, ...task }) => ({
+      ...task,
+      typeSyncId: typeSyncIds.get(typeId)
+    }));
+    const people = listPeople().map(({ id, ...person }) => person);
+    const tombstones = db
+      .prepare(`
+        SELECT entity_type, sync_id, deleted_at
+        FROM sync_tombstones
+        ORDER BY entity_type ASC, sync_id ASC
+      `)
+      .all()
+      .map((row) => ({
+        entityType: row.entity_type,
+        syncId: row.sync_id,
+        deletedAt: row.deleted_at
+      }));
+
+    return {
+      schemaVersion: SYNC_SCHEMA_VERSION,
+      taskTypes,
+      tasks,
+      people,
+      tombstones
+    };
+  }
+
+  function isValidDate(value) {
+    return typeof value === 'string' && !Number.isNaN(Date.parse(value));
+  }
+
+  function shouldApplyRemote(remote, local, toComparableValue) {
+    const remoteTime = Date.parse(remote.updatedAt);
+    const localTime = Date.parse(local.updatedAt);
+    if (remoteTime !== localTime) {
+      return remoteTime > localTime;
+    }
+
+    return JSON.stringify(toComparableValue(remote)) > JSON.stringify(toComparableValue(local));
+  }
+
+  function normalizeRemoteTaskType(taskType) {
+    const syncId = String(taskType?.syncId || '').trim();
+    const name = String(taskType?.name || '').trim();
+    if (!syncId || !name || !isValidDate(taskType?.createdAt) || !isValidDate(taskType?.updatedAt)) {
+      return null;
+    }
+
+    return {
+      syncId,
+      name,
+      sortOrder: Number.isFinite(Number(taskType.sortOrder)) ? Number(taskType.sortOrder) : 0,
+      createdAt: new Date(taskType.createdAt).toISOString(),
+      updatedAt: new Date(taskType.updatedAt).toISOString()
+    };
+  }
+
+  function normalizeRemoteTask(task) {
+    const syncId = String(task?.syncId || '').trim();
+    const typeSyncId = String(task?.typeSyncId || '').trim();
+    const title = String(task?.title || '').trim();
+    const status = String(task?.status || 'todo');
+    if (
+      !syncId ||
+      !typeSyncId ||
+      !title ||
+      !STATUSES.has(status) ||
+      !isValidDate(task?.createdAt) ||
+      !isValidDate(task?.updatedAt)
+    ) {
+      return null;
+    }
+
+    return {
+      syncId,
+      typeSyncId,
+      title,
+      startTime: String(task.startTime || ''),
+      endTime: String(task.endTime || ''),
+      description: String(task.description || ''),
+      location: String(task.location || '').trim(),
+      associatedPeople: cleanAssociatedPeople(task.associatedPeople),
+      subTasks: normalizeSubTasks(task.subTasks),
+      status,
+      sortOrder: Number.isFinite(Number(task.sortOrder)) ? Number(task.sortOrder) : 0,
+      createdAt: new Date(task.createdAt).toISOString(),
+      updatedAt: new Date(task.updatedAt).toISOString()
+    };
+  }
+
+  function mergeSyncSnapshots(snapshots) {
+    if (!Array.isArray(snapshots)) {
+      throw new TypeError('snapshots must be an array');
+    }
+
+    let changed = false;
+    let mergedTaskTypes = 0;
+    let mergedTasks = 0;
+
+    db.transaction(() => {
+      const validSnapshots = snapshots.filter(
+        (snapshot) => snapshot && Number(snapshot.schemaVersion) === SYNC_SCHEMA_VERSION
+      );
+      const getTombstone = db.prepare(
+        'SELECT deleted_at FROM sync_tombstones WHERE entity_type = ? AND sync_id = ?'
+      );
+      const upsertTombstone = db.prepare(`
+        INSERT INTO sync_tombstones (entity_type, sync_id, deleted_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(entity_type, sync_id) DO UPDATE SET deleted_at = excluded.deleted_at
+        WHERE excluded.deleted_at > sync_tombstones.deleted_at
+      `);
+
+      for (const snapshot of validSnapshots) {
+        for (const tombstone of Array.isArray(snapshot.tombstones) ? snapshot.tombstones : []) {
+          const entityType = tombstone?.entityType;
+          const syncId = String(tombstone?.syncId || '').trim();
+          if (!['taskType', 'task'].includes(entityType) || !syncId || !isValidDate(tombstone?.deletedAt)) {
+            continue;
+          }
+          const result = upsertTombstone.run(
+            entityType,
+            syncId,
+            new Date(tombstone.deletedAt).toISOString()
+          );
+          changed ||= result.changes > 0;
+        }
+      }
+
+      for (const tombstone of db.prepare('SELECT * FROM sync_tombstones').all()) {
+        const table = tombstone.entity_type === 'task' ? 'tasks' : 'task_types';
+        const result = db.prepare(`DELETE FROM ${table} WHERE sync_id = ?`).run(tombstone.sync_id);
+        changed ||= result.changes > 0;
+      }
+
+      const remoteTypeIdMap = new Map();
+      const typeComparable = (taskType) => ({
+        name: taskType.name,
+        sortOrder: taskType.sortOrder,
+        createdAt: taskType.createdAt
+      });
+
+      for (const snapshot of validSnapshots) {
+        for (const rawTaskType of Array.isArray(snapshot.taskTypes) ? snapshot.taskTypes : []) {
+          const taskType = normalizeRemoteTaskType(rawTaskType);
+          if (!taskType || getTombstone.get('taskType', taskType.syncId)) {
+            continue;
+          }
+
+          let localRow = db.prepare('SELECT * FROM task_types WHERE sync_id = ?').get(taskType.syncId);
+          if (!localRow) {
+            const sameNameRow = db.prepare('SELECT * FROM task_types WHERE name = ?').get(taskType.name);
+            if (sameNameRow) {
+              remoteTypeIdMap.set(taskType.syncId, sameNameRow.id);
+              continue;
+            }
+
+            const result = db.prepare(`
+              INSERT INTO task_types (sync_id, name, sort_order, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?)
+            `).run(
+              taskType.syncId,
+              taskType.name,
+              taskType.sortOrder,
+              taskType.createdAt,
+              taskType.updatedAt
+            );
+            remoteTypeIdMap.set(taskType.syncId, Number(result.lastInsertRowid));
+            changed = true;
+            mergedTaskTypes += 1;
+            continue;
+          }
+
+          remoteTypeIdMap.set(taskType.syncId, localRow.id);
+          const localTaskType = rowToTaskType(localRow);
+          if (!shouldApplyRemote(taskType, localTaskType, typeComparable)) {
+            continue;
+          }
+
+          const conflictingName = db
+            .prepare('SELECT id FROM task_types WHERE name = ? AND id != ?')
+            .get(taskType.name, localRow.id);
+          if (conflictingName) {
+            remoteTypeIdMap.set(taskType.syncId, conflictingName.id);
+            continue;
+          }
+
+          db.prepare(`
+            UPDATE task_types
+            SET name = ?, sort_order = ?, created_at = ?, updated_at = ?
+            WHERE id = ?
+          `).run(
+            taskType.name,
+            taskType.sortOrder,
+            taskType.createdAt,
+            taskType.updatedAt,
+            localRow.id
+          );
+          changed = true;
+          mergedTaskTypes += 1;
+        }
+      }
+
+      if (db.prepare('SELECT COUNT(*) AS count FROM task_types').get().count === 0) {
+        const now = new Date().toISOString();
+        db.prepare(`
+          INSERT INTO task_types (sync_id, name, sort_order, created_at, updated_at)
+          VALUES (?, '工作', 0, ?, ?)
+        `).run(createSyncId('task-type'), now, now);
+        changed = true;
+      }
+
+      const taskComparable = (task) => ({
+        typeSyncId: task.typeSyncId,
+        title: task.title,
+        startTime: task.startTime,
+        endTime: task.endTime,
+        description: task.description,
+        location: task.location,
+        associatedPeople: task.associatedPeople,
+        subTasks: task.subTasks,
+        status: task.status,
+        sortOrder: task.sortOrder,
+        createdAt: task.createdAt
+      });
+
+      for (const snapshot of validSnapshots) {
+        for (const rawTask of Array.isArray(snapshot.tasks) ? snapshot.tasks : []) {
+          const task = normalizeRemoteTask(rawTask);
+          if (!task || getTombstone.get('task', task.syncId)) {
+            continue;
+          }
+
+          const taskTypeId =
+            remoteTypeIdMap.get(task.typeSyncId) ||
+            db.prepare('SELECT id FROM task_types WHERE sync_id = ?').get(task.typeSyncId)?.id;
+          if (!taskTypeId) {
+            continue;
+          }
+
+          const localRow = db.prepare('SELECT * FROM tasks WHERE sync_id = ?').get(task.syncId);
+          if (!localRow) {
+            db.prepare(`
+              INSERT INTO tasks (
+                sync_id, type_id, title, start_time, end_time, description, location,
+                associated_people, sub_tasks, status, sort_order, created_at, updated_at
+              )
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              task.syncId,
+              taskTypeId,
+              task.title,
+              task.startTime,
+              task.endTime,
+              task.description,
+              task.location,
+              JSON.stringify(task.associatedPeople),
+              JSON.stringify(task.subTasks),
+              task.status,
+              task.sortOrder,
+              task.createdAt,
+              task.updatedAt
+            );
+            rememberPeople(task.associatedPeople, task.updatedAt);
+            changed = true;
+            mergedTasks += 1;
+            continue;
+          }
+
+          const localTask = rowToTask(localRow);
+          localTask.typeSyncId = db
+            .prepare('SELECT sync_id FROM task_types WHERE id = ?')
+            .get(localTask.typeId)?.sync_id;
+          if (!shouldApplyRemote(task, localTask, taskComparable)) {
+            continue;
+          }
+
+          db.prepare(`
+            UPDATE tasks
+            SET type_id = ?, title = ?, start_time = ?, end_time = ?, description = ?,
+                location = ?, associated_people = ?, sub_tasks = ?, status = ?, sort_order = ?,
+                created_at = ?, updated_at = ?
+            WHERE id = ?
+          `).run(
+            taskTypeId,
+            task.title,
+            task.startTime,
+            task.endTime,
+            task.description,
+            task.location,
+            JSON.stringify(task.associatedPeople),
+            JSON.stringify(task.subTasks),
+            task.status,
+            task.sortOrder,
+            task.createdAt,
+            task.updatedAt,
+            localRow.id
+          );
+          rememberPeople(task.associatedPeople, task.updatedAt);
+          changed = true;
+          mergedTasks += 1;
+        }
+
+        for (const person of Array.isArray(snapshot.people) ? snapshot.people : []) {
+          const name = String(person?.name || '').trim();
+          if (!name || !isValidDate(person?.createdAt) || !isValidDate(person?.lastUsedAt)) {
+            continue;
+          }
+          const before = db.prepare('SELECT created_at, last_used_at FROM people WHERE name = ?').get(name);
+          rememberPeople([name], new Date(person.lastUsedAt).toISOString());
+          const createdAt = new Date(person.createdAt).toISOString();
+          db.prepare('UPDATE people SET created_at = MIN(created_at, ?) WHERE name = ?').run(createdAt, name);
+          const after = db.prepare('SELECT created_at, last_used_at FROM people WHERE name = ?').get(name);
+          changed ||= JSON.stringify(before) !== JSON.stringify(after);
+        }
+      }
+    })();
+
+    return { changed, mergedTaskTypes, mergedTasks };
+  }
+
   function close() {
     db.close();
   }
@@ -564,6 +980,8 @@ function createTaskStore(dbPath) {
     updateTask,
     deleteTask,
     reorderTasks,
+    exportSyncSnapshot,
+    mergeSyncSnapshots,
     close
   };
 }

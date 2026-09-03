@@ -15,6 +15,18 @@ contextBridge.exposeInMainWorld('taskApi', {
   reorderTasks: (items) => ipcRenderer.invoke('tasks:reorder', items),
   getOpenAtLogin: () => ipcRenderer.invoke('loginItem:get'),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke('loginItem:set', enabled),
+  getCloudSyncState: () => ipcRenderer.invoke('cloudSync:get'),
+  setCloudSyncEnabled: (enabled) => ipcRenderer.invoke('cloudSync:set', enabled),
+  syncCloudNow: () => ipcRenderer.invoke('cloudSync:syncNow'),
+  onCloudSyncStateChanged: (callback) => {
+    if (typeof callback !== 'function') {
+      return () => {};
+    }
+
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('cloudSync:stateChanged', listener);
+    return () => ipcRenderer.removeListener('cloudSync:stateChanged', listener);
+  },
   onTasksChanged: (callback) => {
     if (typeof callback !== 'function') {
       return () => {};

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,6 +14,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   store?.close();
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
@@ -394,5 +395,61 @@ describe('task store', () => {
       { id: first.id, status: 'todo', sortOrder: 0 },
       { id: second.id, status: 'in_progress', sortOrder: 0 }
     ]);
+  });
+
+  it('merges tasks from another device without confusing local numeric ids', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2030-01-01T08:00:00.000Z'));
+    const otherStore = createTaskStore(path.join(tempDir, 'other.sqlite'));
+
+    try {
+      const localTask = store.createTask({ title: '本机任务', status: 'todo' });
+      const remoteTask = otherStore.createTask({ title: '另一台 Mac 的任务', status: 'todo' });
+
+      expect(localTask.id).toBe(remoteTask.id);
+      expect(localTask.syncId).not.toBe(remoteTask.syncId);
+
+      const result = store.mergeSyncSnapshots([otherStore.exportSyncSnapshot()]);
+
+      expect(result.changed).toBe(true);
+      expect(store.listTasks().map((task) => task.title)).toEqual([
+        '本机任务',
+        '另一台 Mac 的任务'
+      ]);
+    } finally {
+      otherStore.close();
+    }
+  });
+
+  it('applies newer remote edits and keeps remote deletions deleted', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2030-01-01T08:00:00.000Z'));
+    const otherStore = createTaskStore(path.join(tempDir, 'other.sqlite'));
+
+    try {
+      const remoteTask = otherStore.createTask({ title: '初稿', status: 'todo' });
+      store.mergeSyncSnapshots([otherStore.exportSyncSnapshot()]);
+      const localCopy = store.listTasks().find((task) => task.syncId === remoteTask.syncId);
+      expect(localCopy.title).toBe('初稿');
+
+      vi.setSystemTime(new Date('2030-01-01T09:00:00.000Z'));
+      otherStore.updateTask(remoteTask.id, { title: '定稿', status: 'done' });
+      store.mergeSyncSnapshots([otherStore.exportSyncSnapshot()]);
+      expect(store.getTask(localCopy.id)).toMatchObject({ title: '定稿', status: 'done' });
+
+      vi.setSystemTime(new Date('2030-01-01T10:00:00.000Z'));
+      otherStore.deleteTask(remoteTask.id);
+      store.mergeSyncSnapshots([otherStore.exportSyncSnapshot()]);
+      expect(store.listTasks().some((task) => task.syncId === remoteTask.syncId)).toBe(false);
+
+      store.mergeSyncSnapshots([{
+        ...otherStore.exportSyncSnapshot(),
+        tasks: [{ ...remoteTask, typeSyncId: otherStore.listTaskTypes()[0].syncId }],
+        tombstones: []
+      }]);
+      expect(store.listTasks().some((task) => task.syncId === remoteTask.syncId)).toBe(false);
+    } finally {
+      otherStore.close();
+    }
   });
 });

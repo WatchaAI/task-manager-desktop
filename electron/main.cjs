@@ -3,12 +3,15 @@ const path = require('node:path');
 const { createTaskStore } = require('./taskStore.cjs');
 const { registerTaskHandlers } = require('./taskIpc.cjs');
 const { registerLoginItemHandlers } = require('./loginItemIpc.cjs');
+const { createCloudSync } = require('./cloudSync.cjs');
+const { registerCloudSyncHandlers } = require('./cloudSyncIpc.cjs');
 const { createTaskDatabaseWatcher } = require('./taskDatabaseWatcher.cjs');
 const { createMacCalendarDelete, createMacCalendarSync } = require('./macCalendar.cjs');
 
 let mainWindow;
 let store;
 let dbWatcher;
+let cloudSync;
 
 function isDev() {
   return !app.isPackaged;
@@ -56,6 +59,13 @@ function notifyTasksChanged() {
   mainWindow.webContents.send('tasks:changed');
 }
 
+function notifyCloudSyncStateChanged(state) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.send('cloudSync:stateChanged', state);
+}
+
 app.whenReady().then(() => {
   const dbPath = path.join(app.getPath('userData'), 'tasks.sqlite');
   store = createTaskStore(dbPath);
@@ -65,8 +75,19 @@ app.whenReady().then(() => {
     deleteTaskFromCalendar: createMacCalendarDelete()
   });
   registerLoginItemHandlers(ipcMain, app);
+  cloudSync = createCloudSync({
+    store,
+    userDataPath: app.getPath('userData'),
+    onDataChanged: notifyTasksChanged,
+    onStateChanged: notifyCloudSyncStateChanged
+  });
+  registerCloudSyncHandlers(ipcMain, cloudSync);
   createWindow();
-  dbWatcher = createTaskDatabaseWatcher(dbPath, notifyTasksChanged);
+  dbWatcher = createTaskDatabaseWatcher(dbPath, () => {
+    notifyTasksChanged();
+    cloudSync.notifyLocalChange();
+  });
+  void cloudSync.start();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -82,6 +103,9 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  if (cloudSync) {
+    cloudSync.close();
+  }
   if (dbWatcher) {
     dbWatcher.close();
   }

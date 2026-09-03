@@ -204,6 +204,16 @@ function App() {
   const [isLoginItemSaving, setIsLoginItemSaving] = useState(false);
   const [loginItemStatus, setLoginItemStatus] = useState(null);
   const [loginItemError, setLoginItemError] = useState('');
+  const [cloudSyncState, setCloudSyncState] = useState({
+    enabled: false,
+    available: false,
+    status: 'disabled',
+    lastSyncedAt: null,
+    error: ''
+  });
+  const [isCloudSyncLoading, setIsCloudSyncLoading] = useState(false);
+  const [isCloudSyncSaving, setIsCloudSyncSaving] = useState(false);
+  const [cloudSyncError, setCloudSyncError] = useState('');
   const activeTypeIdRef = useRef(null);
   const viewStateRef = useRef(viewState);
 
@@ -328,6 +338,13 @@ function App() {
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = getTaskApi().onCloudSyncStateChanged?.((nextState) => {
+      setCloudSyncState(nextState);
+    });
+    return unsubscribe;
+  }, []);
+
   async function handleRefresh() {
     try {
       setIsRefreshing(true);
@@ -345,16 +362,24 @@ function App() {
   async function handleOpenSettings() {
     setIsSettingsOpen(true);
     setIsLoginItemLoading(true);
+    setIsCloudSyncLoading(true);
     setLoginItemError('');
-    try {
-      const settings = await getTaskApi().getOpenAtLogin();
-      setOpenAtLogin(settings.openAtLogin);
-      setLoginItemStatus(settings.status);
-    } catch (err) {
-      setLoginItemError(err.message || '无法读取系统登录项设置');
-    } finally {
-      setIsLoginItemLoading(false);
-    }
+    setCloudSyncError('');
+    await Promise.all([
+      getTaskApi()
+        .getOpenAtLogin()
+        .then((settings) => {
+          setOpenAtLogin(settings.openAtLogin);
+          setLoginItemStatus(settings.status);
+        })
+        .catch((err) => setLoginItemError(err.message || '无法读取系统登录项设置'))
+        .finally(() => setIsLoginItemLoading(false)),
+      getTaskApi()
+        .getCloudSyncState()
+        .then(setCloudSyncState)
+        .catch((err) => setCloudSyncError(err.message || '无法读取 iCloud 同步状态'))
+        .finally(() => setIsCloudSyncLoading(false))
+    ]);
   }
 
   async function handleOpenAtLoginChange(enabled) {
@@ -371,6 +396,34 @@ function App() {
       setLoginItemError(err.message || '无法更新系统登录项设置');
     } finally {
       setIsLoginItemSaving(false);
+    }
+  }
+
+  async function handleCloudSyncEnabledChange(enabled) {
+    setIsCloudSyncSaving(true);
+    setCloudSyncError('');
+    try {
+      const nextState = await getTaskApi().setCloudSyncEnabled(enabled);
+      setCloudSyncState(nextState);
+      if (nextState.enabled !== enabled && enabled) {
+        setCloudSyncError(nextState.error || '无法开启 iCloud 同步');
+      }
+    } catch (err) {
+      setCloudSyncError(err.message || '无法更新 iCloud 同步设置');
+    } finally {
+      setIsCloudSyncSaving(false);
+    }
+  }
+
+  async function handleSyncCloudNow() {
+    setIsCloudSyncSaving(true);
+    setCloudSyncError('');
+    try {
+      setCloudSyncState(await getTaskApi().syncCloudNow());
+    } catch (err) {
+      setCloudSyncError(err.message || '无法同步 iCloud 数据');
+    } finally {
+      setIsCloudSyncSaving(false);
     }
   }
 
@@ -891,7 +944,13 @@ function App() {
           isSaving={isLoginItemSaving}
           status={loginItemStatus}
           error={loginItemError}
+          cloudSyncState={cloudSyncState}
+          isCloudSyncLoading={isCloudSyncLoading}
+          isCloudSyncSaving={isCloudSyncSaving}
+          cloudSyncError={cloudSyncError}
           onOpenAtLoginChange={handleOpenAtLoginChange}
+          onCloudSyncEnabledChange={handleCloudSyncEnabledChange}
+          onSyncCloudNow={handleSyncCloudNow}
           onClose={() => setIsSettingsOpen(false)}
         />
       )}

@@ -15,6 +15,18 @@
 - 支持跨列拖拽和同列排序
 - SQLite 持久化，数据库保存在 Electron 的 `userData` 目录
 - 支持监听外部数据库变更，CLI 写入同一 SQLite 后桌面端会自动刷新，也可手动刷新
+- 支持通过 iCloud Drive 在登录同一 Apple ID 的多台 Mac 之间同步任务数据
+
+## iCloud 多设备同步
+
+在“设置”中打开“iCloud 多设备同步”后，应用会同步任务、任务类型和常用联系人。开机自动启动属于单台 Mac 的系统设置，不参与同步。
+
+- 每台 Mac 仍使用本地 SQLite，离线时可以正常编辑
+- 恢复联网后自动合并各设备的快照，也可以在设置中点击“立即同步”
+- 同一条记录发生冲突时保留较新的修改；删除记录不会被旧设备重新带回
+- 同步文件位于 `iCloud Drive/Task Manager Desktop`，不会把 SQLite 数据库直接放入云盘
+
+使用前请确认各台 Mac 登录了同一个 Apple ID，并在“系统设置 → Apple ID → iCloud”中开启 iCloud Drive。
 
 ## 界面截图
 

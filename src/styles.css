@@ -1220,7 +1220,14 @@ h1 {
 
 .settings-modal {
   width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   border-radius: 10px;
+}
+
+.settings-section {
+  display: grid;
+  gap: 9px;
 }
 
 .settings-row {
@@ -1323,6 +1330,7 @@ h1 {
 }
 
 .settings-status,
+.settings-cloud-success,
 .settings-warning,
 .settings-error {
   display: flex;
@@ -1337,6 +1345,42 @@ h1 {
 .settings-status {
   background: #f1f5f9;
   color: #5d6b80;
+}
+
+.settings-cloud-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-cloud-success {
+  flex: 1;
+  background: #ecfdf3;
+  color: #16794a;
+}
+
+.settings-sync-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #cbd8ea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #34506f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settings-sync-button:hover:not(:disabled) {
+  border-color: #9db5d2;
+  background: #f7faff;
+}
+
+.settings-sync-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
 }
 
 .settings-warning {
