@@ -42,6 +42,19 @@ function createDevice(name) {
 }
 
 describe('iCloud data sync', () => {
+  it('polls iCloud every ten minutes as a fallback', async () => {
+    fs.mkdirSync(path.join(tempDir, 'iCloud Drive'), { recursive: true });
+    const mac = createDevice('mac-a');
+    await mac.service.setEnabled(true);
+    const firstSyncedAt = mac.service.getState().lastSyncedAt;
+
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000 - 1);
+    expect(mac.service.getState().lastSyncedAt).toBe(firstSyncedAt);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mac.service.getState().lastSyncedAt).not.toBe(firstSyncedAt);
+  });
+
   it('shares creates, edits, and deletions between two Macs', async () => {
     fs.mkdirSync(path.join(tempDir, 'iCloud Drive'), { recursive: true });
     const macA = createDevice('mac-a');

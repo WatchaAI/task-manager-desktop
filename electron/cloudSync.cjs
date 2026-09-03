@@ -46,7 +46,7 @@ function createCloudSync({
   onDataChanged = () => {},
   onStateChanged = () => {},
   debounceMs = 500,
-  pollIntervalMs = 15_000,
+  pollIntervalMs = 10 * 60 * 1000,
   watch = true
 }) {
   if (!store || typeof store.exportSyncSnapshot !== 'function' || typeof store.mergeSyncSnapshots !== 'function') {
