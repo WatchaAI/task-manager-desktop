@@ -23,6 +23,19 @@ function snapshotData(snapshot) {
   };
 }
 
+function isValidSnapshotEnvelope(snapshot) {
+  return (
+    snapshot &&
+    typeof snapshot === 'object' &&
+    Number(snapshot.schemaVersion) === 1 &&
+    Array.isArray(snapshot.taskTypes) &&
+    Array.isArray(snapshot.tasks) &&
+    Array.isArray(snapshot.people) &&
+    Array.isArray(snapshot.tombstones) &&
+    (snapshot.aliases === undefined || Array.isArray(snapshot.aliases))
+  );
+}
+
 function createCloudSync({
   store,
   userDataPath,
@@ -131,7 +144,7 @@ function createCloudSync({
       .map((entry) => {
         try {
           const snapshot = JSON.parse(fsModule.readFileSync(path.join(devicesPath, entry.name), 'utf8'));
-          if (!snapshot || typeof snapshot !== 'object') {
+          if (!isValidSnapshotEnvelope(snapshot)) {
             throw new Error('Invalid snapshot');
           }
           return snapshot;

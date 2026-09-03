@@ -163,7 +163,7 @@ describe('iCloud data sync', () => {
     });
   });
 
-  it('reports an error instead of claiming success when a remote snapshot is unreadable', async () => {
+  it('reports an error instead of claiming success when a remote snapshot is invalid', async () => {
     const devicesPath = path.join(
       tempDir,
       'iCloud Drive',
@@ -172,7 +172,7 @@ describe('iCloud data sync', () => {
       'devices'
     );
     fs.mkdirSync(devicesPath, { recursive: true });
-    fs.writeFileSync(path.join(devicesPath, 'another-device.json'), '{not valid json', 'utf8');
+    fs.writeFileSync(path.join(devicesPath, 'another-device.json'), '{}', 'utf8');
     const mac = createDevice('mac-a');
 
     const state = await mac.service.setEnabled(true);
