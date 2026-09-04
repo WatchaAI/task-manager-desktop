@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { registerTaskHandlers } from '../electron/taskIpc.cjs';
+import { createTaskStore } from '../electron/taskStore.cjs';
 
 function createFakeIpcMain() {
   const handlers = new Map();
@@ -19,6 +23,32 @@ function createFakeIpcMain() {
 }
 
 describe('task IPC handlers', () => {
+  it('completes old unfinished tasks before returning task data for user activity', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 4, 12, 0, 0));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'task-manager-ipc-'));
+    const store = createTaskStore(path.join(tempDir, 'tasks.sqlite'));
+
+    try {
+      store.createTask({
+        title: '前天未完成的任务',
+        startTime: '2026-09-02T00:00',
+        endTime: '2026-09-02T23:59',
+        status: 'todo'
+      });
+      const ipcMain = createFakeIpcMain();
+      registerTaskHandlers(ipcMain, store);
+
+      expect(ipcMain.invoke('tasks:list')).toMatchObject([
+        { title: '前天未完成的任务', status: 'done' }
+      ]);
+    } finally {
+      store.close();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      vi.useRealTimers();
+    }
+  });
+
   it('registers CRUD and reorder channels', async () => {
     const ipcMain = createFakeIpcMain();
     const openExternal = vi.fn(() => Promise.resolve());

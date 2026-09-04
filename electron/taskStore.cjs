@@ -7,6 +7,22 @@ const STATUSES = new Set(TASK_STATUS_ORDER);
 const DEFAULT_TASK_TYPES = ['工作', '学习', '日常'];
 const DEFAULT_TASK_TYPE_UPDATED_AT = '2000-01-01T00:00:00.000Z';
 const SYNC_SCHEMA_VERSION = 1;
+const DATE_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})/;
+
+function toLocalDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function taskDueDateKey(task) {
+  const startDateKey = String(task.start_time || '').match(DATE_KEY_PATTERN)?.[0] || '';
+  const endDateKey = String(task.end_time || '').match(DATE_KEY_PATTERN)?.[0] || '';
+  if (!startDateKey) return endDateKey;
+  if (!endDateKey) return startDateKey;
+  return startDateKey > endDateKey ? startDateKey : endDateKey;
+}
 
 function createSyncId(prefix) {
   return `${prefix}-${randomUUID()}`;
@@ -546,6 +562,48 @@ function createTaskStore(dbPath) {
       )
       .all(...values)
       .map(rowToTask);
+  }
+
+  const completeOldTasksTransaction = db.transaction((now) => {
+    const cutoff = new Date(now);
+    cutoff.setHours(0, 0, 0, 0);
+    cutoff.setDate(cutoff.getDate() - 2);
+    const cutoffDateKey = toLocalDateKey(cutoff);
+    const candidates = db
+      .prepare("SELECT * FROM tasks WHERE status IN ('todo', 'in_progress') ORDER BY type_id, sort_order, created_at")
+      .all()
+      .filter((task) => {
+        const dueDateKey = taskDueDateKey(task);
+        return dueDateKey && dueDateKey <= cutoffDateKey;
+      });
+
+    const nextDoneSortOrderByType = new Map();
+    const updateTask = db.prepare(`
+      UPDATE tasks
+      SET status = 'done',
+          sort_order = ?,
+          updated_at = ?
+      WHERE id = ?
+    `);
+    const updatedAt = new Date(now).toISOString();
+
+    for (const task of candidates) {
+      if (!nextDoneSortOrderByType.has(task.type_id)) {
+        const row = db
+          .prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM tasks WHERE type_id = ? AND status = 'done'")
+          .get(task.type_id);
+        nextDoneSortOrderByType.set(task.type_id, row.next_order);
+      }
+      const sortOrder = nextDoneSortOrderByType.get(task.type_id);
+      updateTask.run(sortOrder, updatedAt, task.id);
+      nextDoneSortOrderByType.set(task.type_id, sortOrder + 1);
+    }
+
+    return candidates.map((task) => rowToTask(db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id)));
+  });
+
+  function completeOldTasks(now = new Date()) {
+    return completeOldTasksTransaction(now);
   }
 
   function nextSortOrder(typeId, status) {
@@ -1109,6 +1167,7 @@ function createTaskStore(dbPath) {
     updateTask,
     deleteTask,
     reorderTasks,
+    completeOldTasks,
     exportSyncSnapshot,
     mergeSyncSnapshots,
     close

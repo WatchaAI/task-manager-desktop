@@ -25,15 +25,21 @@ function registerTaskHandlers(
   { openExternal, syncTaskToCalendar, deleteTaskFromCalendar } = {}
 ) {
   const recentCreateRequests = new Map();
+  const handleActivity = (channel, handler) => {
+    ipcMain.handle(channel, (event, ...args) => {
+      store.completeOldTasks?.();
+      return handler(event, ...args);
+    });
+  };
 
-  ipcMain.handle('taskTypes:list', () => store.listTaskTypes());
-  ipcMain.handle('taskTypes:create', (_event, taskType) => store.createTaskType(taskType));
-  ipcMain.handle('taskTypes:update', (_event, payload) => {
+  handleActivity('taskTypes:list', () => store.listTaskTypes());
+  handleActivity('taskTypes:create', (_event, taskType) => store.createTaskType(taskType));
+  handleActivity('taskTypes:update', (_event, payload) => {
     const { id, ...taskType } = payload;
     return store.updateTaskType(id, taskType);
   });
-  ipcMain.handle('taskTypes:reorder', (_event, items) => store.reorderTaskTypes(items));
-  ipcMain.handle('taskTypes:delete', async (_event, id) => {
+  handleActivity('taskTypes:reorder', (_event, items) => store.reorderTaskTypes(items));
+  handleActivity('taskTypes:delete', async (_event, id) => {
     const tasks =
       typeof deleteTaskFromCalendar === 'function' && typeof store.listTasks === 'function'
         ? store.listTasks(id)
@@ -62,8 +68,8 @@ function registerTaskHandlers(
       }
     };
   });
-  ipcMain.handle('people:list', () => store.listPeople());
-  ipcMain.handle('maps:open', async (_event, location) => {
+  handleActivity('people:list', () => store.listPeople());
+  handleActivity('maps:open', async (_event, location) => {
     const url = createMapUrl(location);
     if (!url) {
       throw new Error('Task location is required');
@@ -74,8 +80,8 @@ function registerTaskHandlers(
     await openExternal(url);
     return { ok: true };
   });
-  ipcMain.handle('tasks:list', (_event, typeId) => store.listTasks(typeId));
-  ipcMain.handle('tasks:create', async (_event, task) => {
+  handleActivity('tasks:list', (_event, typeId) => store.listTasks(typeId));
+  handleActivity('tasks:create', async (_event, task) => {
     const { requestId, ...taskInput } = task;
     const requestKey = requestId
       ? `request:${requestId}`
@@ -114,7 +120,7 @@ function registerTaskHandlers(
 
     return createRequest;
   });
-  ipcMain.handle('tasks:update', async (_event, payload) => {
+  handleActivity('tasks:update', async (_event, payload) => {
     const { id, ...task } = payload;
     const previousTask = typeof store.getTask === 'function' ? store.getTask(id) : undefined;
     const updatedTask = store.updateTask(id, task);
@@ -130,7 +136,7 @@ function registerTaskHandlers(
       return { ...updatedTask, calendarSync: calendarFailureResult(error) };
     }
   });
-  ipcMain.handle('tasks:delete', async (_event, id) => {
+  handleActivity('tasks:delete', async (_event, id) => {
     const previousTask = typeof store.getTask === 'function' ? store.getTask(id) : undefined;
     const deletedTask = store.deleteTask(id);
     if (typeof deleteTaskFromCalendar !== 'function') {
@@ -145,7 +151,7 @@ function registerTaskHandlers(
       return { ...deletedTask, id, calendarSync: calendarFailureResult(error, 'deleted') };
     }
   });
-  ipcMain.handle('tasks:reorder', async (_event, items) => {
+  handleActivity('tasks:reorder', async (_event, items) => {
     const previousTasks = new Map(
       typeof store.getTask === 'function'
         ? items.map((item) => [item.id, store.getTask(item.id)])

@@ -292,6 +292,55 @@ describe('task store', () => {
     expect(store.listTasks()).toEqual([]);
   });
 
+  it('automatically completes unfinished tasks due two days ago or earlier during task activity', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 4, 12, 0, 0));
+
+    const olderTodo = store.createTask({
+      title: '三天前的待办',
+      startTime: '2026-09-01T00:00',
+      endTime: '2026-09-01T23:59',
+      status: 'todo'
+    });
+    const dayBeforeYesterdayInProgress = store.createTask({
+      title: '前天仍在进行的任务',
+      startTime: '2026-09-02T00:00',
+      endTime: '2026-09-02T23:59',
+      status: 'in_progress'
+    });
+    const spanningTask = store.createTask({
+      title: '延续到昨天的任务',
+      startTime: '2026-09-02T00:00',
+      endTime: '2026-09-03T23:59',
+      status: 'todo'
+    });
+    const yesterdayTodo = store.createTask({
+      title: '昨天的待办',
+      startTime: '2026-09-03T00:00',
+      endTime: '2026-09-03T23:59',
+      status: 'todo'
+    });
+    const unscheduledTask = store.createTask({
+      title: '未排期任务',
+      status: 'todo'
+    });
+    const canceledTask = store.createTask({
+      title: '前天已取消的任务',
+      startTime: '2026-09-02T00:00',
+      endTime: '2026-09-02T23:59',
+      status: 'canceled'
+    });
+
+    store.completeOldTasks();
+
+    expect(store.getTask(olderTodo.id).status).toBe('done');
+    expect(store.getTask(dayBeforeYesterdayInProgress.id).status).toBe('done');
+    expect(store.getTask(spanningTask.id).status).toBe('todo');
+    expect(store.getTask(yesterdayTodo.id).status).toBe('todo');
+    expect(store.getTask(unscheduledTask.id).status).toBe('todo');
+    expect(store.getTask(canceledTask.id).status).toBe('canceled');
+  });
+
   it('sanitizes blank subtasks and generates ids for new subtasks', () => {
     const created = store.createTask({
       title: '发布版本',
