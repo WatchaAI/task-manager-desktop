@@ -318,6 +318,36 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let lastCheckedLocalDate = '';
+    let checkInFlight = false;
+    async function checkOldTasksForActivity() {
+      const currentLocalDate = new Date().toDateString();
+      if (checkInFlight || currentLocalDate === lastCheckedLocalDate) {
+        return;
+      }
+
+      checkInFlight = true;
+      lastCheckedLocalDate = currentLocalDate;
+      try {
+        await getTaskApi().completeOldTasks();
+      } catch (err) {
+        lastCheckedLocalDate = '';
+        setError(err.message || '检查历史任务失败');
+      } finally {
+        checkInFlight = false;
+      }
+    }
+
+    void checkOldTasksForActivity();
+    window.addEventListener('pointerdown', checkOldTasksForActivity, true);
+    window.addEventListener('keydown', checkOldTasksForActivity, true);
+    return () => {
+      window.removeEventListener('pointerdown', checkOldTasksForActivity, true);
+      window.removeEventListener('keydown', checkOldTasksForActivity, true);
+    };
+  }, []);
+
+  useEffect(() => {
     activeTypeIdRef.current = activeTypeId;
   }, [activeTypeId]);
 

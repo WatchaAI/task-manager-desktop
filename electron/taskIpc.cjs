@@ -22,24 +22,80 @@ function calendarDetailsChanged(previousTask, nextTask) {
 function registerTaskHandlers(
   ipcMain,
   store,
-  { openExternal, syncTaskToCalendar, deleteTaskFromCalendar } = {}
+  {
+    openExternal,
+    syncTaskToCalendar,
+    deleteTaskFromCalendar,
+    onTasksAutomaticallyCompleted
+  } = {}
 ) {
   const recentCreateRequests = new Map();
-  const handleActivity = (channel, handler) => {
+  const completeTasksDueTwoDaysAgoOrEarlier = () =>
+    store.completeTasksDueTwoDaysAgoOrEarlier?.() || [];
+  const notifyAutomaticCompletion = (completedTasks) => {
+    if (completedTasks.length > 0) {
+      onTasksAutomaticallyCompleted?.(completedTasks);
+    }
+  };
+  const mergeCompletedTasksIntoResult = (result, completedTasks) => {
+    if (completedTasks.length === 0) {
+      return result;
+    }
+    const completedTaskById = new Map(completedTasks.map((task) => [task.id, task]));
+    if (Array.isArray(result)) {
+      return result.map((item) => {
+        const completedTask = completedTaskById.get(item?.id);
+        return completedTask ? { ...item, ...completedTask } : item;
+      });
+    }
+    const completedTask = completedTaskById.get(result?.id);
+    return completedTask ? { ...result, ...completedTask } : result;
+  };
+  const registerHandlerWithAutomaticTaskCompletion = (
+    channel,
+    handler,
+    { refreshTaskResult = false } = {}
+  ) => {
     ipcMain.handle(channel, (event, ...args) => {
-      store.completeOldTasks?.();
-      return handler(event, ...args);
+      const completedBefore = completeTasksDueTwoDaysAgoOrEarlier();
+      const finishActivity = (result) => {
+        const completedAfter = completeTasksDueTwoDaysAgoOrEarlier();
+        const completedTasks = [...completedBefore, ...completedAfter];
+        notifyAutomaticCompletion(completedTasks);
+        return refreshTaskResult
+          ? mergeCompletedTasksIntoResult(result, completedTasks)
+          : result;
+      };
+      const handleFailure = (error) => {
+        notifyAutomaticCompletion(completedBefore);
+        throw error;
+      };
+
+      try {
+        const result = handler(event, ...args);
+        return result && typeof result.then === 'function'
+          ? result.then(finishActivity, handleFailure)
+          : finishActivity(result);
+      } catch (error) {
+        return handleFailure(error);
+      }
     });
   };
 
-  handleActivity('taskTypes:list', () => store.listTaskTypes());
-  handleActivity('taskTypes:create', (_event, taskType) => store.createTaskType(taskType));
-  handleActivity('taskTypes:update', (_event, payload) => {
+  ipcMain.handle('tasks:completeOld', () => {
+    const completedTasks = completeTasksDueTwoDaysAgoOrEarlier();
+    notifyAutomaticCompletion(completedTasks);
+    return completedTasks;
+  });
+
+  registerHandlerWithAutomaticTaskCompletion('taskTypes:list', () => store.listTaskTypes());
+  registerHandlerWithAutomaticTaskCompletion('taskTypes:create', (_event, taskType) => store.createTaskType(taskType));
+  registerHandlerWithAutomaticTaskCompletion('taskTypes:update', (_event, payload) => {
     const { id, ...taskType } = payload;
     return store.updateTaskType(id, taskType);
   });
-  handleActivity('taskTypes:reorder', (_event, items) => store.reorderTaskTypes(items));
-  handleActivity('taskTypes:delete', async (_event, id) => {
+  registerHandlerWithAutomaticTaskCompletion('taskTypes:reorder', (_event, items) => store.reorderTaskTypes(items));
+  registerHandlerWithAutomaticTaskCompletion('taskTypes:delete', async (_event, id) => {
     const tasks =
       typeof deleteTaskFromCalendar === 'function' && typeof store.listTasks === 'function'
         ? store.listTasks(id)
@@ -68,8 +124,8 @@ function registerTaskHandlers(
       }
     };
   });
-  handleActivity('people:list', () => store.listPeople());
-  handleActivity('maps:open', async (_event, location) => {
+  registerHandlerWithAutomaticTaskCompletion('people:list', () => store.listPeople());
+  registerHandlerWithAutomaticTaskCompletion('maps:open', async (_event, location) => {
     const url = createMapUrl(location);
     if (!url) {
       throw new Error('Task location is required');
@@ -80,8 +136,12 @@ function registerTaskHandlers(
     await openExternal(url);
     return { ok: true };
   });
-  handleActivity('tasks:list', (_event, typeId) => store.listTasks(typeId));
-  handleActivity('tasks:create', async (_event, task) => {
+  registerHandlerWithAutomaticTaskCompletion(
+    'tasks:list',
+    (_event, typeId) => store.listTasks(typeId),
+    { refreshTaskResult: true }
+  );
+  registerHandlerWithAutomaticTaskCompletion('tasks:create', async (_event, task) => {
     const { requestId, ...taskInput } = task;
     const requestKey = requestId
       ? `request:${requestId}`
@@ -119,8 +179,8 @@ function registerTaskHandlers(
       .catch(() => {});
 
     return createRequest;
-  });
-  handleActivity('tasks:update', async (_event, payload) => {
+  }, { refreshTaskResult: true });
+  registerHandlerWithAutomaticTaskCompletion('tasks:update', async (_event, payload) => {
     const { id, ...task } = payload;
     const previousTask = typeof store.getTask === 'function' ? store.getTask(id) : undefined;
     const updatedTask = store.updateTask(id, task);
@@ -135,8 +195,8 @@ function registerTaskHandlers(
       console.error('[calendar:update-failed]', error);
       return { ...updatedTask, calendarSync: calendarFailureResult(error) };
     }
-  });
-  handleActivity('tasks:delete', async (_event, id) => {
+  }, { refreshTaskResult: true });
+  registerHandlerWithAutomaticTaskCompletion('tasks:delete', async (_event, id) => {
     const previousTask = typeof store.getTask === 'function' ? store.getTask(id) : undefined;
     const deletedTask = store.deleteTask(id);
     if (typeof deleteTaskFromCalendar !== 'function') {
@@ -151,7 +211,7 @@ function registerTaskHandlers(
       return { ...deletedTask, id, calendarSync: calendarFailureResult(error, 'deleted') };
     }
   });
-  handleActivity('tasks:reorder', async (_event, items) => {
+  registerHandlerWithAutomaticTaskCompletion('tasks:reorder', async (_event, items) => {
     const previousTasks = new Map(
       typeof store.getTask === 'function'
         ? items.map((item) => [item.id, store.getTask(item.id)])
@@ -182,7 +242,7 @@ function registerTaskHandlers(
       const calendarSync = calendarSyncByTaskId.get(task.id);
       return calendarSync ? { ...task, calendarSync } : task;
     });
-  });
+  }, { refreshTaskResult: true });
 }
 
 module.exports = {

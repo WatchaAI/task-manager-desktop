@@ -564,7 +564,7 @@ function createTaskStore(dbPath) {
       .map(rowToTask);
   }
 
-  const completeOldTasksTransaction = db.transaction((now) => {
+  const completeTasksDueTwoDaysAgoOrEarlierTransaction = db.transaction((now) => {
     const cutoff = new Date(now);
     cutoff.setHours(0, 0, 0, 0);
     cutoff.setDate(cutoff.getDate() - 2);
@@ -602,8 +602,8 @@ function createTaskStore(dbPath) {
     return candidates.map((task) => rowToTask(db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id)));
   });
 
-  function completeOldTasks(now = new Date()) {
-    return completeOldTasksTransaction(now);
+  function completeTasksDueTwoDaysAgoOrEarlier(now = new Date()) {
+    return completeTasksDueTwoDaysAgoOrEarlierTransaction(now);
   }
 
   function nextSortOrder(typeId, status) {
@@ -1167,7 +1167,7 @@ function createTaskStore(dbPath) {
     updateTask,
     deleteTask,
     reorderTasks,
-    completeOldTasks,
+    completeTasksDueTwoDaysAgoOrEarlier,
     exportSyncSnapshot,
     mergeSyncSnapshots,
     close

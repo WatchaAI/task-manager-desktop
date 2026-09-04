@@ -72,7 +72,11 @@ app.whenReady().then(() => {
   registerTaskHandlers(ipcMain, store, {
     openExternal: (url) => shell.openExternal(url),
     syncTaskToCalendar: createMacCalendarSync(),
-    deleteTaskFromCalendar: createMacCalendarDelete()
+    deleteTaskFromCalendar: createMacCalendarDelete(),
+    onTasksAutomaticallyCompleted: () => {
+      notifyTasksChanged();
+      cloudSync?.notifyLocalChange();
+    }
   });
   registerLoginItemHandlers(ipcMain, app);
   cloudSync = createCloudSync({

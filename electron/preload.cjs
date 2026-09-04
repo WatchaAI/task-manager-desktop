@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('taskApi', {
   updateTask: (payload) => ipcRenderer.invoke('tasks:update', payload),
   deleteTask: (id) => ipcRenderer.invoke('tasks:delete', id),
   reorderTasks: (items) => ipcRenderer.invoke('tasks:reorder', items),
+  completeOldTasks: () => ipcRenderer.invoke('tasks:completeOld'),
   getOpenAtLogin: () => ipcRenderer.invoke('loginItem:get'),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke('loginItem:set', enabled),
   getCloudSyncState: () => ipcRenderer.invoke('cloudSync:get'),

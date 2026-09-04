@@ -49,6 +49,63 @@ describe('task IPC handlers', () => {
     }
   });
 
+  it('keeps an old task completed when the same activity submits a stale unfinished status', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 4, 12, 0, 0));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'task-manager-ipc-'));
+    const store = createTaskStore(path.join(tempDir, 'tasks.sqlite'));
+
+    try {
+      const oldTask = store.createTask({
+        title: '前天未完成的任务',
+        startTime: '2026-09-02T00:00',
+        endTime: '2026-09-02T23:59',
+        status: 'todo'
+      });
+      const ipcMain = createFakeIpcMain();
+      registerTaskHandlers(ipcMain, store);
+
+      await expect(
+        ipcMain.invoke('tasks:update', { id: oldTask.id, title: '补充说明后保存', status: 'todo' })
+      ).resolves.toMatchObject({
+        id: oldTask.id,
+        title: '补充说明后保存',
+        status: 'done'
+      });
+      expect(store.getTask(oldTask.id).status).toBe('done');
+    } finally {
+      store.close();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      vi.useRealTimers();
+    }
+  });
+
+  it('checks old tasks through the general application activity channel', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 4, 12, 0, 0));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'task-manager-ipc-'));
+    const store = createTaskStore(path.join(tempDir, 'tasks.sqlite'));
+
+    try {
+      store.createTask({
+        title: '等待界面操作触发',
+        startTime: '2026-09-02T00:00',
+        endTime: '2026-09-02T23:59',
+        status: 'in_progress'
+      });
+      const ipcMain = createFakeIpcMain();
+      registerTaskHandlers(ipcMain, store);
+
+      expect(ipcMain.invoke('tasks:completeOld')).toMatchObject([
+        { title: '等待界面操作触发', status: 'done' }
+      ]);
+    } finally {
+      store.close();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      vi.useRealTimers();
+    }
+  });
+
   it('registers CRUD and reorder channels', async () => {
     const ipcMain = createFakeIpcMain();
     const openExternal = vi.fn(() => Promise.resolve());

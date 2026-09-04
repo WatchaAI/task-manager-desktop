@@ -331,7 +331,7 @@ describe('task store', () => {
       status: 'canceled'
     });
 
-    store.completeOldTasks();
+    store.completeTasksDueTwoDaysAgoOrEarlier();
 
     expect(store.getTask(olderTodo.id).status).toBe('done');
     expect(store.getTask(dayBeforeYesterdayInProgress.id).status).toBe('done');
