@@ -80,6 +80,47 @@ describe('task IPC handlers', () => {
     }
   });
 
+  it('keeps a user reschedule instead of returning the completion snapshot from before the activity', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 4, 12, 0, 0));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'task-manager-ipc-'));
+    const store = createTaskStore(path.join(tempDir, 'tasks.sqlite'));
+
+    try {
+      const oldTask = store.createTask({
+        title: '需要延期的任务',
+        startTime: '2026-09-02T00:00',
+        endTime: '2026-09-02T23:59',
+        status: 'todo'
+      });
+      const ipcMain = createFakeIpcMain();
+      registerTaskHandlers(ipcMain, store);
+
+      await expect(
+        ipcMain.invoke('tasks:update', {
+          id: oldTask.id,
+          startTime: '2026-09-05T00:00',
+          endTime: '2026-09-05T23:59',
+          status: 'todo'
+        })
+      ).resolves.toMatchObject({
+        id: oldTask.id,
+        startTime: '2026-09-05T00:00',
+        endTime: '2026-09-05T23:59',
+        status: 'todo'
+      });
+      expect(store.getTask(oldTask.id)).toMatchObject({
+        startTime: '2026-09-05T00:00',
+        endTime: '2026-09-05T23:59',
+        status: 'todo'
+      });
+    } finally {
+      store.close();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      vi.useRealTimers();
+    }
+  });
+
   it('checks old tasks through the general application activity channel', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 8, 4, 12, 0, 0));

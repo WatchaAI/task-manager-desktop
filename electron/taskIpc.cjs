@@ -63,7 +63,7 @@ function registerTaskHandlers(
         const completedTasks = [...completedBefore, ...completedAfter];
         notifyAutomaticCompletion(completedTasks);
         return refreshTaskResult
-          ? mergeCompletedTasksIntoResult(result, completedTasks)
+          ? mergeCompletedTasksIntoResult(result, completedAfter)
           : result;
       };
       const handleFailure = (error) => {
