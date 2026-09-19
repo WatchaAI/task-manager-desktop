@@ -26,6 +26,7 @@
 - 恢复联网后自动合并各设备的快照，也可以在设置中点击“立即同步”
 - 同一条记录发生冲突时保留较新的修改；删除记录不会被旧设备重新带回
 - 同步文件位于 `iCloud Drive/Task Manager Desktop`，不会把 SQLite 数据库直接放入云盘
+- 同步开启时，日历节假日数据会写入 `Sync/extras/holidays.json`，供 iOS 端读取展示
 
 使用前请确认各台 Mac 登录了同一个 Apple ID，并在“系统设置 → Apple ID → iCloud”中开启 iCloud Drive。
 
