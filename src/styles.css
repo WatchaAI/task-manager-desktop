@@ -636,6 +636,59 @@ h1 {
   color: #ffffff;
 }
 
+.calendar-day-number.holiday {
+  color: #d92d20;
+}
+
+.calendar-holiday-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 2px;
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 25px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-holiday-label.holiday {
+  color: #d92d20;
+}
+
+.calendar-holiday-label.workday {
+  color: #98a2b3;
+}
+
+.calendar-day.today .calendar-holiday-label.workday {
+  color: #8a96a8;
+}
+
+.calendar-expanded-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.calendar-expanded-holiday {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.calendar-expanded-holiday.holiday {
+  background: #fef3f2;
+  color: #d92d20;
+}
+
+.calendar-expanded-holiday.workday {
+  background: #f2f4f7;
+  color: #667085;
+}
+
 .calendar-expand-button {
   width: 24px;
   height: 24px;
@@ -1390,6 +1443,12 @@ h1 {
   opacity: 0.58;
 }
 
+.settings-holiday-actions {
+  display: grid;
+  gap: 6px;
+  justify-items: stretch;
+}
+
 .settings-warning {
   border: 1px solid #fde68a;
   background: #fffbeb;
@@ -1804,6 +1863,11 @@ h1 {
   .calendar-day-number {
     width: 21px;
     height: 21px;
+  }
+
+  .calendar-holiday-label {
+    font-size: 9px;
+    line-height: 21px;
   }
 
   .calendar-day-header {

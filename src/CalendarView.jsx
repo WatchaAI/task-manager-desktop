@@ -59,7 +59,8 @@ export function CalendarView({
   scope = CALENDAR_SCOPES.ALL,
   onScopeChange,
   expandedDateKey = null,
-  onExpandedDateChange
+  onExpandedDateChange,
+  holidayByDate = {}
 }) {
   const visibleTasks = tasks.filter((task) => task.status !== 'canceled');
   const days = buildCalendarDays(currentMonth);
@@ -67,6 +68,7 @@ export function CalendarView({
   const unscheduledTasks = getUnscheduledTasks(visibleTasks);
   const expandedDay = days.find((day) => day.dateKey === expandedDateKey);
   const expandedDayTasks = expandedDay ? getTasksForCalendarDay(visibleTasks, expandedDay.dateKey) : [];
+  const expandedHoliday = expandedDay ? holidayByDate[expandedDay.dateKey] : undefined;
 
   function changeMonth(date) {
     onExpandedDateChange(null);
@@ -135,7 +137,17 @@ export function CalendarView({
           <div className="calendar-expanded-header">
             <div>
               <p className="calendar-kicker">当天任务 · {expandedDayTasks.length}</p>
-              <h3>{formatDayLabel(expandedDay.date)}</h3>
+              <div className="calendar-expanded-title">
+                <h3>{formatDayLabel(expandedDay.date)}</h3>
+                {expandedHoliday && (
+                  <span
+                    className={`calendar-expanded-holiday ${expandedHoliday.isOffDay ? 'holiday' : 'workday'}`}
+                    title={expandedHoliday.isOffDay ? expandedHoliday.name : `${expandedHoliday.name}调休上班`}
+                  >
+                    {expandedHoliday.isOffDay ? expandedHoliday.name : `${expandedHoliday.name}调休上班`}
+                  </span>
+                )}
+              </div>
             </div>
             <button
               className="icon-button calendar-collapse-button"
@@ -173,17 +185,31 @@ export function CalendarView({
           {days.map((day) => {
             const dayTasks = getTasksForCalendarDay(visibleTasks, day.dateKey);
             const isToday = day.dateKey === todayKey;
+            const holiday = holidayByDate[day.dateKey];
+            const holidayText = holiday ? (holiday.isOffDay ? holiday.name : '调休上班') : '';
             return (
               <div
                 className={`calendar-day ${day.isCurrentMonth ? '' : 'outside-month'} ${isToday ? 'today' : ''}`}
                 role="gridcell"
                 key={day.dateKey}
-                aria-label={`${formatDayLabel(day.date)}，${dayTasks.length}个任务`}
+                aria-label={`${formatDayLabel(day.date)}${holidayText ? `，${holidayText}` : ''}，${dayTasks.length}个任务`}
                 aria-current={isToday ? 'date' : undefined}
                 onDoubleClick={() => onCreateTask(day.date)}
               >
                 <div className="calendar-day-header">
-                  <span className="calendar-day-number">{day.date.getDate()}</span>
+                  <span
+                    className={['calendar-day-number', holiday?.isOffDay ? 'holiday' : ''].filter(Boolean).join(' ')}
+                  >
+                    {day.date.getDate()}
+                  </span>
+                  {holiday && (
+                    <span
+                      className={`calendar-holiday-label ${holiday.isOffDay ? 'holiday' : 'workday'}`}
+                      title={holiday.isOffDay ? holiday.name : `${holiday.name}调休上班`}
+                    >
+                      {holidayText}
+                    </span>
+                  )}
                   <button
                     className="calendar-expand-button"
                     type="button"

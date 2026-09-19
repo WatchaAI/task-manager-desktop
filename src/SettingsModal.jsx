@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Cloud, LoaderCircle, Power, RefreshCw, X } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Cloud, FolderOpen, LoaderCircle, Power, RefreshCw, X } from 'lucide-react';
 
 function formatLastSyncedAt(value) {
   if (!value) return '';
@@ -27,11 +27,20 @@ export function SettingsModal({
   onOpenAtLoginChange,
   onCloudSyncEnabledChange = () => {},
   onSyncCloudNow = () => {},
+  holidayYears = [],
+  isHolidayUpdating = false,
+  isHolidayImporting = false,
+  holidayMessage = '',
+  holidayError = '',
+  onUpdateHolidays = () => {},
+  onImportHolidays = () => {},
   onClose
 }) {
   const isBusy = isLoading || isSaving;
   const cloudBusy = isCloudSyncLoading || isCloudSyncSaving || cloudSyncState.status === 'syncing';
   const lastSyncedAt = formatLastSyncedAt(cloudSyncState.lastSyncedAt);
+  const holidayBusy = isHolidayUpdating || isHolidayImporting;
+  const latestHolidayYear = holidayYears.length > 0 ? holidayYears[holidayYears.length - 1] : null;
 
   return (
     <div className="modal-backdrop" role="presentation">
@@ -147,6 +156,59 @@ export function SettingsModal({
           {error && (
             <p className="settings-error" role="alert">
               {error}
+            </p>
+          )}
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-row">
+            <span className="settings-row-icon" aria-hidden="true">
+              <CalendarDays size={18} />
+            </span>
+            <span className="settings-row-copy">
+              <strong>中国法定节假日</strong>
+              <span>
+                在日历中标记节假日和调休上班日
+                {holidayYears.length > 0 ? ` · 已加载 ${holidayYears.join('、')} 年` : ''}
+              </span>
+            </span>
+            <span className="settings-holiday-actions">
+              <button
+                className="settings-sync-button"
+                type="button"
+                aria-label="一键更新节假日"
+                disabled={holidayBusy}
+                onClick={onUpdateHolidays}
+              >
+                {isHolidayUpdating ? (
+                  <LoaderCircle className="spin-icon" size={14} />
+                ) : (
+                  <RefreshCw size={14} />
+                )}
+                {isHolidayUpdating ? '更新中' : `一键更新${latestHolidayYear ? ` ${latestHolidayYear}` : ''} 节假日`}
+              </button>
+              <button
+                className="settings-sync-button"
+                type="button"
+                aria-label="从 JSON 文件导入节假日"
+                disabled={holidayBusy}
+                onClick={onImportHolidays}
+              >
+                <FolderOpen size={14} />
+                从 JSON 导入
+              </button>
+            </span>
+          </div>
+
+          {holidayMessage && (
+            <p className="settings-cloud-success" role="status">
+              <CheckCircle2 size={15} />
+              {holidayMessage}
+            </p>
+          )}
+          {holidayError && (
+            <p className="settings-error" role="alert">
+              {holidayError}
             </p>
           )}
         </div>

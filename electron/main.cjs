@@ -1,10 +1,12 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const { createTaskStore } = require('./taskStore.cjs');
 const { registerTaskHandlers } = require('./taskIpc.cjs');
 const { registerLoginItemHandlers } = require('./loginItemIpc.cjs');
 const { createCloudSync } = require('./cloudSync.cjs');
 const { registerCloudSyncHandlers } = require('./cloudSyncIpc.cjs');
+const { createHolidayService } = require('./holidays.cjs');
+const { registerHolidayHandlers } = require('./holidayIpc.cjs');
 const { createTaskDatabaseWatcher } = require('./taskDatabaseWatcher.cjs');
 const { createMacCalendarDelete, createMacCalendarSync } = require('./macCalendar.cjs');
 
@@ -86,6 +88,14 @@ app.whenReady().then(() => {
     onStateChanged: notifyCloudSyncStateChanged
   });
   registerCloudSyncHandlers(ipcMain, cloudSync);
+  registerHolidayHandlers(
+    ipcMain,
+    createHolidayService({
+      userDataPath: app.getPath('userData'),
+      dialog,
+      getWindow: () => mainWindow
+    })
+  );
   createWindow();
   dbWatcher = createTaskDatabaseWatcher(dbPath, () => {
     notifyTasksChanged();

@@ -214,6 +214,11 @@ function App() {
   const [isCloudSyncLoading, setIsCloudSyncLoading] = useState(false);
   const [isCloudSyncSaving, setIsCloudSyncSaving] = useState(false);
   const [cloudSyncError, setCloudSyncError] = useState('');
+  const [holidayState, setHolidayState] = useState({ years: [], holidays: {} });
+  const [isHolidayUpdating, setIsHolidayUpdating] = useState(false);
+  const [isHolidayImporting, setIsHolidayImporting] = useState(false);
+  const [holidayMessage, setHolidayMessage] = useState('');
+  const [holidayError, setHolidayError] = useState('');
   const activeTypeIdRef = useRef(null);
   const viewStateRef = useRef(viewState);
 
@@ -315,6 +320,13 @@ function App() {
 
   useEffect(() => {
     loadBoardData();
+  }, []);
+
+  useEffect(() => {
+    getTaskApi()
+      .getHolidays()
+      .then(setHolidayState)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -454,6 +466,39 @@ function App() {
       setCloudSyncError(err.message || '无法同步 iCloud 数据');
     } finally {
       setIsCloudSyncSaving(false);
+    }
+  }
+
+  async function handleUpdateHolidays() {
+    setIsHolidayUpdating(true);
+    setHolidayError('');
+    setHolidayMessage('');
+    try {
+      const nextState = await getTaskApi().updateHolidays();
+      setHolidayState({ years: nextState.years, holidays: nextState.holidays });
+      setHolidayMessage(nextState.message || '节假日数据已更新');
+    } catch (err) {
+      setHolidayError(err.message || '在线更新节假日数据失败');
+    } finally {
+      setIsHolidayUpdating(false);
+    }
+  }
+
+  async function handleImportHolidays() {
+    setIsHolidayImporting(true);
+    setHolidayError('');
+    setHolidayMessage('');
+    try {
+      const nextState = await getTaskApi().importHolidays();
+      if (nextState?.canceled) {
+        return;
+      }
+      setHolidayState({ years: nextState.years, holidays: nextState.holidays });
+      setHolidayMessage(nextState.message || '节假日数据已导入');
+    } catch (err) {
+      setHolidayError(err.message || '导入节假日数据失败');
+    } finally {
+      setIsHolidayImporting(false);
     }
   }
 
@@ -919,6 +964,7 @@ function App() {
             onScopeChange={handleCalendarScopeChange}
             expandedDateKey={expandedCalendarDateKey}
             onExpandedDateChange={setExpandedCalendarDateKey}
+            holidayByDate={holidayState.holidays}
           />
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
@@ -981,6 +1027,13 @@ function App() {
           onOpenAtLoginChange={handleOpenAtLoginChange}
           onCloudSyncEnabledChange={handleCloudSyncEnabledChange}
           onSyncCloudNow={handleSyncCloudNow}
+          holidayYears={holidayState.years}
+          isHolidayUpdating={isHolidayUpdating}
+          isHolidayImporting={isHolidayImporting}
+          holidayMessage={holidayMessage}
+          holidayError={holidayError}
+          onUpdateHolidays={handleUpdateHolidays}
+          onImportHolidays={handleImportHolidays}
           onClose={() => setIsSettingsOpen(false)}
         />
       )}

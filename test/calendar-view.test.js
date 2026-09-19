@@ -209,4 +209,76 @@ describe('calendar view', () => {
     collapseButton.props.onClick();
     expect(onExpandedDateChange).toHaveBeenLastCalledWith(null);
   });
+
+  it('marks holidays in red and make-up workdays in gray', () => {
+    const view = CalendarView({
+      tasks: [],
+      currentMonth: new Date(2026, 6, 1),
+      onMonthChange: vi.fn(),
+      onOpenTask: vi.fn(),
+      onCreateTask: vi.fn(),
+      onExpandedDateChange: vi.fn(),
+      holidayByDate: {
+        '2026-07-17': { name: '测试节', isOffDay: true },
+        '2026-07-18': { name: '国庆节', isOffDay: false }
+      }
+    });
+    const holidayCell = findElement(
+      view,
+      (element) => element.props?.role === 'gridcell' && element.props?.['aria-label'] === '7月17日，测试节，0个任务'
+    );
+    const workdayCell = findElement(
+      view,
+      (element) => element.props?.role === 'gridcell' && element.props?.['aria-label'] === '7月18日，调休上班，0个任务'
+    );
+
+    expect(holidayCell).not.toBeNull();
+    expect(workdayCell).not.toBeNull();
+
+    const holidayNumber = findElement(
+      holidayCell,
+      (element) => element.props?.className === 'calendar-day-number holiday'
+    );
+    const holidayLabel = findElement(
+      holidayCell,
+      (element) => element.props?.className === 'calendar-holiday-label holiday'
+    );
+    expect(holidayNumber).not.toBeNull();
+    expect(holidayLabel.props.children).toBe('测试节');
+    expect(holidayLabel.props.title).toBe('测试节');
+
+    const workdayNumber = findElement(
+      workdayCell,
+      (element) => element.props?.className === 'calendar-day-number'
+    );
+    const workdayLabel = findElement(
+      workdayCell,
+      (element) => element.props?.className === 'calendar-holiday-label workday'
+    );
+    expect(workdayNumber).not.toBeNull();
+    expect(workdayLabel.props.children).toBe('调休上班');
+    expect(workdayLabel.props.title).toBe('国庆节调休上班');
+  });
+
+  it('shows the holiday name in the expanded day header', () => {
+    const view = CalendarView({
+      tasks: [],
+      currentMonth: new Date(2026, 6, 1),
+      onMonthChange: vi.fn(),
+      onOpenTask: vi.fn(),
+      onCreateTask: vi.fn(),
+      expandedDateKey: '2026-07-17',
+      onExpandedDateChange: vi.fn(),
+      holidayByDate: {
+        '2026-07-17': { name: '测试节', isOffDay: true }
+      }
+    });
+    const holidayChip = findElement(
+      view,
+      (element) => element.props?.className === 'calendar-expanded-holiday holiday'
+    );
+
+    expect(holidayChip).not.toBeNull();
+    expect(holidayChip.props.children).toBe('测试节');
+  });
 });

@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('taskApi', {
   getCloudSyncState: () => ipcRenderer.invoke('cloudSync:get'),
   setCloudSyncEnabled: (enabled) => ipcRenderer.invoke('cloudSync:set', enabled),
   syncCloudNow: () => ipcRenderer.invoke('cloudSync:syncNow'),
+  getHolidays: () => ipcRenderer.invoke('holidays:get'),
+  updateHolidays: () => ipcRenderer.invoke('holidays:update'),
+  importHolidays: () => ipcRenderer.invoke('holidays:import'),
   onCloudSyncStateChanged: (callback) => {
     if (typeof callback !== 'function') {
       return () => {};
