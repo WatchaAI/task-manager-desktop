@@ -195,4 +195,70 @@ describe('createHolidayService', () => {
     await expect(service.updateYear(2028)).rejects.toThrow('无法在线更新');
     expect(fs.existsSync(path.join(userDataPath, 'holidays.json'))).toBe(false);
   });
+
+  it('exposes the full merged year data for extras sync', () => {
+    const service = createHolidayService({ userDataPath });
+    const yearData = service.getYearData();
+
+    expect(Object.keys(yearData)).toEqual(['2026']);
+    expect(yearData['2026'].year).toBe(2026);
+    expect(yearData['2026'].days).toContainEqual({ name: '中秋节', date: '2026-09-25', isOffDay: true });
+    expect(yearData['2026'].days).toContainEqual({ name: '国庆节', date: '2026-09-20', isOffDay: false });
+  });
+
+  it('notifies onDataChanged with the full year map after a successful update', async () => {
+    const onDataChanged = vi.fn();
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => VALID_YEAR }));
+    const service = createHolidayService({ userDataPath, fetchImpl, onDataChanged });
+
+    await service.updateYear(2027);
+
+    expect(onDataChanged).toHaveBeenCalledTimes(1);
+    const payload = onDataChanged.mock.calls[0][0];
+    expect(payload['2026'].days.length).toBeGreaterThan(0);
+    expect(payload['2027']).toEqual(VALID_YEAR);
+  });
+
+  it('notifies onDataChanged after a successful import', async () => {
+    const importFile = path.join(userDataPath, 'import.json');
+    fs.writeFileSync(importFile, JSON.stringify(VALID_YEAR));
+    const dialog = { showOpenDialog: vi.fn(async () => ({ canceled: false, filePaths: [importFile] })) };
+    const onDataChanged = vi.fn();
+    const service = createHolidayService({ userDataPath, dialog, onDataChanged });
+
+    await service.importFromFile();
+
+    expect(onDataChanged).toHaveBeenCalledTimes(1);
+    expect(onDataChanged.mock.calls[0][0]['2027']).toEqual(VALID_YEAR);
+  });
+
+  it('does not notify onDataChanged when an update or import fails', async () => {
+    const onDataChanged = vi.fn();
+    const fetchImpl = vi.fn(async () => { throw new Error('offline'); });
+    const service = createHolidayService({ userDataPath, fetchImpl, onDataChanged });
+
+    await expect(service.updateYear(2027)).rejects.toThrow('无法在线更新');
+    expect(onDataChanged).not.toHaveBeenCalled();
+
+    const brokenFile = path.join(userDataPath, 'broken.json');
+    fs.writeFileSync(brokenFile, JSON.stringify({ year: 2027, days: [{ name: '', date: '2027-01-01', isOffDay: true }] }));
+    const dialog = { showOpenDialog: vi.fn(async () => ({ canceled: false, filePaths: [brokenFile] })) };
+    const importingService = createHolidayService({ userDataPath, dialog, onDataChanged });
+
+    await expect(importingService.importFromFile()).rejects.toThrow('节假日文件格式不正确');
+    expect(onDataChanged).not.toHaveBeenCalled();
+  });
+
+  it('keeps the flow working when the onDataChanged callback throws', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => VALID_YEAR }));
+    const service = createHolidayService({
+      userDataPath,
+      fetchImpl,
+      onDataChanged: () => { throw new Error('extras unavailable'); }
+    });
+
+    const result = await service.updateYear(2027);
+
+    expect(result.holidays['2027-01-01']).toEqual({ name: '元旦', isOffDay: true });
+  });
 });

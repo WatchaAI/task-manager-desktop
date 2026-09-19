@@ -88,20 +88,27 @@ app.whenReady().then(() => {
     onStateChanged: notifyCloudSyncStateChanged
   });
   registerCloudSyncHandlers(ipcMain, cloudSync);
-  registerHolidayHandlers(
-    ipcMain,
-    createHolidayService({
-      userDataPath: app.getPath('userData'),
-      dialog,
-      getWindow: () => mainWindow
-    })
-  );
+  const holidayService = createHolidayService({
+    userDataPath: app.getPath('userData'),
+    dialog,
+    getWindow: () => mainWindow,
+    onDataChanged: (years) => {
+      cloudSync?.writeExtra('holidays.json', years);
+    }
+  });
+  registerHolidayHandlers(ipcMain, holidayService);
   createWindow();
   dbWatcher = createTaskDatabaseWatcher(dbPath, () => {
     notifyTasksChanged();
     cloudSync.notifyLocalChange();
   });
   void cloudSync.start();
+  // 首次加载兜底：同步已开启时把完整节假日数据写入 Sync/extras/holidays.json
+  try {
+    cloudSync.writeExtra('holidays.json', holidayService.getYearData());
+  } catch (error) {
+    console.error('[holidays:extras] 写入失败', error);
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

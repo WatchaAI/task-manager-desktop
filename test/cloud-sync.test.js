@@ -194,4 +194,52 @@ describe('iCloud data sync', () => {
     expect(state.lastSyncedAt).toBeNull();
     expect(state.error).toContain('无法读取');
   });
+
+  describe('writeExtra', () => {
+    const extrasPath = () => path.join(tempDir, 'iCloud Drive', 'Task Manager Desktop', 'Sync', 'extras');
+
+    it('writes extras atomically next to devices when sync is enabled', async () => {
+      fs.mkdirSync(path.join(tempDir, 'iCloud Drive'), { recursive: true });
+      const mac = createDevice('mac-a');
+      await mac.service.setEnabled(true);
+
+      const written = mac.service.writeExtra('holidays.json', { '2026': { year: 2026, days: [] } });
+
+      expect(written).toBe(true);
+      const file = path.join(extrasPath(), 'holidays.json');
+      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ '2026': { year: 2026, days: [] } });
+      expect(fs.readdirSync(extrasPath()).filter((name) => name.includes('.tmp-'))).toEqual([]);
+
+      const devicesPath = path.join(tempDir, 'iCloud Drive', 'Task Manager Desktop', 'Sync', 'devices');
+      const deviceFiles = fs.readdirSync(devicesPath);
+      expect(deviceFiles.every((name) => name.endsWith('.json'))).toBe(true);
+      expect(deviceFiles).not.toContain('holidays.json');
+    });
+
+    it('does not write extras when sync is disabled', () => {
+      fs.mkdirSync(path.join(tempDir, 'iCloud Drive'), { recursive: true });
+      const mac = createDevice('mac-a');
+
+      expect(mac.service.writeExtra('holidays.json', {})).toBe(false);
+      expect(fs.existsSync(extrasPath())).toBe(false);
+    });
+
+    it('does not write extras when iCloud Drive is unavailable', async () => {
+      fs.mkdirSync(path.join(tempDir, 'iCloud Drive'), { recursive: true });
+      const mac = createDevice('mac-a');
+      await mac.service.setEnabled(true);
+      fs.rmSync(path.join(tempDir, 'iCloud Drive'), { recursive: true, force: true });
+
+      expect(mac.service.writeExtra('holidays.json', {})).toBe(false);
+    });
+
+    it('rejects file names that escape the extras directory', async () => {
+      fs.mkdirSync(path.join(tempDir, 'iCloud Drive'), { recursive: true });
+      const mac = createDevice('mac-a');
+      await mac.service.setEnabled(true);
+
+      expect(() => mac.service.writeExtra('../devices/holidays.json', {})).toThrow(TypeError);
+      expect(() => mac.service.writeExtra('', {})).toThrow(TypeError);
+    });
+  });
 });

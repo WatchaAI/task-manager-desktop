@@ -131,7 +131,8 @@ function createHolidayService({
   fsModule = fs,
   fetchImpl = globalThis.fetch?.bind(globalThis),
   dialog = null,
-  getWindow = () => null
+  getWindow = () => null,
+  onDataChanged = () => {}
 } = {}) {
   if (!userDataPath) {
     throw new TypeError('A userData path is required');
@@ -180,11 +181,28 @@ function createHolidayService({
     };
   }
 
+  function getYearData() {
+    const data = {};
+    for (const yearData of getMergedYears()) {
+      data[String(yearData.year)] = yearData;
+    }
+    return data;
+  }
+
+  function notifyDataChanged() {
+    try {
+      onDataChanged(getYearData());
+    } catch {
+      // 节假日附加同步是尽力而为，失败不影响主流程
+    }
+  }
+
   function mergeYearData(yearData) {
     const stored = readStoredYears();
     stored[String(yearData.year)] = yearData;
     fsModule.mkdirSync(userDataPath, { recursive: true });
     writeJsonAtomically(fsModule, holidaysFilePath, stored);
+    notifyDataChanged();
     return getState();
   }
 
@@ -243,6 +261,7 @@ function createHolidayService({
 
   return {
     getState,
+    getYearData,
     updateYear,
     importFromFile
   };

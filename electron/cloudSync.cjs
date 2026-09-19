@@ -5,6 +5,7 @@ const { createHash, randomUUID } = require('node:crypto');
 
 const CLOUD_FOLDER_NAME = 'Task Manager Desktop';
 const SETTINGS_FILE_NAME = 'cloud-sync.json';
+const EXTRAS_DIR_NAME = 'extras';
 
 function writeJsonAtomically(fsModule, filePath, value) {
   const temporaryPath = `${filePath}.tmp-${process.pid}-${randomUUID()}`;
@@ -338,11 +339,26 @@ function createCloudSync({
     stopWatching();
   }
 
+  // 写入 Sync/extras/<fileName>，与 devices 目录平级；仅在同步开启且 iCloud 可用时写入。
+  function writeExtra(fileName, value) {
+    if (typeof fileName !== 'string' || !fileName || fileName.includes('/') || fileName.includes('\\')) {
+      throw new TypeError('A plain file name is required');
+    }
+    if (!state.enabled || !isCloudDriveAvailable()) {
+      return false;
+    }
+    const extrasPath = path.join(resolvedCloudDrivePath, CLOUD_FOLDER_NAME, 'Sync', EXTRAS_DIR_NAME);
+    fsModule.mkdirSync(extrasPath, { recursive: true });
+    writeJsonAtomically(fsModule, path.join(extrasPath, fileName), value);
+    return true;
+  }
+
   return {
     start,
     getState,
     setEnabled,
     syncNow,
+    writeExtra,
     notifyLocalChange: scheduleSync,
     close
   };
@@ -350,5 +366,6 @@ function createCloudSync({
 
 module.exports = {
   CLOUD_FOLDER_NAME,
+  EXTRAS_DIR_NAME,
   createCloudSync
 };
